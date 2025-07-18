@@ -3,7 +3,7 @@
 client_id = "fa9d90437a467b7215e296d9eb003d7d"
 name = "B1: Bulk Product SEO Optimizer"
 handle = "b1-bulk-product-seo-optimizer"
-application_url = "https://msgid-glenn-suffer-larry.trycloudflare.com"
+application_url = "https://bulky-hs0c.onrender.com"
 embedded = true
 
 [build]
@@ -34,7 +34,7 @@ api_version = "2025-07"
 scopes = "write_products"
 
 [auth]
-redirect_urls = ["https://msgid-glenn-suffer-larry.trycloudflare.com/auth/callback", "https://msgid-glenn-suffer-larry.trycloudflare.com/auth/shopify/callback", "https://msgid-glenn-suffer-larry.trycloudflare.com/api/auth/callback"]
+redirect_urls = ["https://bulky-hs0c.onrender.com/auth/callback", "https://bulky-hs0c.onrender.com/auth/shopify/callback", "https://bulky-hs0c.onrender.com/api/auth/callback"]
 
 [pos]
 embedded = false

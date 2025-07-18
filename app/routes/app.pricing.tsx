@@ -23,7 +23,6 @@ import {
 import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { getUserByShop } from "../models/user.server";
 import { ensureUserExists } from "../utils/db.server";
 
 // Plan constants - keep in sync with shopify.server.ts

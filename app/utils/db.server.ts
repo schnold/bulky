@@ -1,6 +1,6 @@
 import prisma from "../db.server";
 
-export async function ensureUserExists(shop: string) {
+export async function ensureUserExists(shop: string, includeKeywords = false) {
   const user = await prisma.user.findUnique({
     where: { shop },
     include: {
@@ -9,6 +9,7 @@ export async function ensureUserExists(shop: string) {
         orderBy: { createdAt: "desc" },
         take: 1,
       },
+      keywords: includeKeywords,
     },
   });
 
@@ -21,9 +22,17 @@ export async function ensureUserExists(shop: string) {
         credits: 10,
         onboardingCompleted: false,
       },
+      include: {
+        subscriptions: {
+          where: { status: "active" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        keywords: includeKeywords,
+      },
     });
     
-    console.log(`Created new user for shop: ${shop}`);
+    console.log(`🆕 Created new user for shop: ${shop}`);
     return newUser;
   }
 

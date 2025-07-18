@@ -1,14 +1,13 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { 
-  getUserByShop, 
-  createUser, 
   updateUserPlan, 
   createSubscription, 
   updateSubscription, 
   getSubscriptionByShopifyId,
   getCreditsForPlan 
 } from "../models/user.server";
+import { ensureUserExists } from "../utils/db.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
@@ -32,10 +31,7 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
   const subscription = payload.app_subscription;
   
   // Ensure user exists
-  let user = await getUserByShop(shop);
-  if (!user) {
-    user = await createUser({ shop });
-  }
+  const user = await ensureUserExists(shop);
 
   // Get or create subscription record
   let subscriptionRecord = await getSubscriptionByShopifyId(subscription.id);

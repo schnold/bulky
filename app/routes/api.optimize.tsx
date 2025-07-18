@@ -2,12 +2,11 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import {
-  getUserByShop,
-  createUser,
   updateUserCredits,
   getCreditsForPlan
 } from "../models/user.server";
 import { getCurrentSubscription } from "../utils/billing.server";
+import { ensureUserExists } from "../utils/db.server";
 
 interface OptimizationContext {
   targetKeywords?: string;
@@ -17,6 +16,7 @@ interface OptimizationContext {
   useCase?: string;
   competitorAnalysis?: boolean;
   voiceSearchOptimization?: boolean;
+  specialInstructions?: string;
 }
 
 interface Product {
@@ -42,6 +42,13 @@ ADDITIONAL CONTEXT:
 - Competitor Analysis: ${context.competitorAnalysis ? "Yes - use competitive keywords" : "Product-focused"}
 ` : "";
 
+  const specialInstructionsInfo = context?.specialInstructions ? `
+🎯 SPECIAL INSTRUCTIONS (MUST FOLLOW):
+${context.specialInstructions}
+
+IMPORTANT: These special instructions take priority and must be incorporated into all optimization decisions.
+` : "";
+
   const prompt = `TASK: Optimize this Shopify product using 2025 e-commerce SEO best practices for maximum search visibility and conversion performance.
 
 === CURRENT PRODUCT DATA ===
@@ -49,7 +56,7 @@ Title: ${product.title}
 Description: ${product.descriptionHtml || "No description provided"}
 Product Type: ${product.productType || "Uncategorized"}
 Tags: ${product.tags?.length > 0 ? product.tags.join(", ") : "No tags"}
-Handle: ${product.handle}${contextInfo}
+Handle: ${product.handle}${contextInfo}${specialInstructionsInfo}
 
 === 2025 OPTIMIZATION REQUIREMENTS ===
 
@@ -195,28 +202,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const optimizationContext = formData.get("context") ? JSON.parse(formData.get("context") as string) : undefined;
 
   if (intent === "optimize") {
-    // Check credits and billing before processing
-    let user = await getUserByShop(session.shop);
-    if (!user) {
-      // Create user if they don't exist (first time using the app)
-      const newUser = await createUser({
-        shop: session.shop,
-        plan: "free",
-        credits: 10,
-      });
-      console.log(`🆕 Created new user for shop: ${session.shop}`);
-
-      // Handle case where user creation fails
-      if (!newUser) {
-        return json({ error: "Failed to create user account" }, { status: 500 });
-      }
-
-      // Fetch the complete user object with subscriptions
-      user = await getUserByShop(session.shop);
-      if (!user) {
-        return json({ error: "Failed to retrieve user account after creation" }, { status: 500 });
-      }
-    }
+    // Get user data (user is guaranteed to exist from app.tsx loader)
+    const user = await ensureUserExists(session.shop);
 
     const requiredCredits = productIds.length;
     let hasEnoughCredits = user.credits >= requiredCredits;

@@ -16,7 +16,6 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { getUserByShop } from "../models/user.server";
 import { getCurrentSubscription } from "../utils/billing.server";
 import { BillingStatus } from "../components/BillingStatus";
 import { ensureUserExists } from "../utils/db.server";

@@ -77,24 +77,16 @@ interface OptimizationContext {
   useCase?: string;
   competitorAnalysis?: boolean;
   voiceSearchOptimization?: boolean;
+  specialInstructions?: string;
 }
 
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
-  // Get real user data from database
-  const { getUserByShop, createUser } = await import("../models/user.server");
-  let user = await getUserByShop(session.shop);
-  
-  // Create user if they don't exist (first time using the app)
-  if (!user) {
-    user = await createUser({
-      shop: session.shop,
-      plan: "free",
-      credits: 10,
-    });
-  }
+  // Get user data from database (user is guaranteed to exist from app.tsx loader)
+  const { ensureUserExists } = await import("../utils/db.server");
+  const user = await ensureUserExists(session.shop);
 
   // Get subscription data
   const subscription = user?.subscriptions?.[0] || null;
@@ -254,8 +246,11 @@ export default function Products() {
     useCase: "",
     competitorAnalysis: false,
     voiceSearchOptimization: true,
+    specialInstructions: "",
   });
   const [pendingOptimizationIds, setPendingOptimizationIds] = useState<string[]>([]);
+  const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
+  const [specialInstructions, setSpecialInstructions] = useState("");
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchValue(value);
@@ -377,13 +372,13 @@ export default function Products() {
     if (optimizationQueue.length > 0 && fetcherState === "idle" && !currentOptimizingProduct) {
       const nextProductId = optimizationQueue[0];
       const nextProduct = products.find(p => p.id === nextProductId);
-      
+
       if (nextProduct) {
         // Remove from queue and start optimizing
         setOptimizationQueue(prev => prev.slice(1));
         setCurrentOptimizingProduct(nextProductId);
         setOptimizingProducts(prev => new Set([...prev, nextProductId]));
-        
+
         // Update progress
         setBulkOptimizationProgress(prev => ({
           ...prev,
@@ -391,12 +386,17 @@ export default function Products() {
           currentProductTitle: nextProduct.title
         }));
 
-        // Submit optimization request for single product
+        // Submit optimization request for single product with special instructions
+        const contextWithInstructions = {
+          ...advancedContext,
+          specialInstructions: specialInstructions || undefined
+        };
+        
         optimizeFetcher.submit(
           {
             intent: "optimize",
             productIds: JSON.stringify([nextProductId]),
-            context: JSON.stringify(advancedContext),
+            context: JSON.stringify(contextWithInstructions),
           },
           {
             method: "POST",
@@ -413,10 +413,10 @@ export default function Products() {
   useEffect(() => {
     if (fetcherData && currentOptimizingProduct && fetcherState === "idle") {
       const results = (fetcherData as any)?.results;
-      
+
       if (results && results.length > 0) {
         const result = results[0]; // Single product result
-        
+
         // Remove from optimizing and add to appropriate set
         setOptimizingProducts(prev => {
           const newSet = new Set(prev);
@@ -445,7 +445,7 @@ export default function Products() {
         if (optimizationQueue.length === 0) {
           const totalCompleted = completedProducts.size + (result.success ? 1 : 0);
           const totalFailed = failedProducts.size + (!result.success ? 1 : 0);
-          
+
           // Show completion message
           if (totalCompleted > 0) {
             setToastMessage(`Successfully optimized ${totalCompleted} product(s)${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`);
@@ -455,13 +455,13 @@ export default function Products() {
 
           // Reset states after completion
           setTimeout(() => {
-            setBulkOptimizationProgress({ 
-              current: 0, 
-              total: 0, 
-              currentProductTitle: "", 
-              isActive: false, 
-              completed: 0, 
-              failed: 0 
+            setBulkOptimizationProgress({
+              current: 0,
+              total: 0,
+              currentProductTitle: "",
+              isActive: false,
+              completed: 0,
+              failed: 0
             });
             setOptimizingProducts(new Set());
             setCompletedProducts(new Set());
@@ -488,21 +488,21 @@ export default function Products() {
         return newSet;
       });
       setCurrentOptimizingProduct(null);
-      
+
       // Show error toast if this was the last product
       if (optimizationQueue.length === 0) {
         setToastMessage(`Optimization failed for some products`);
         setToastError(true);
         setShowToast(true);
-        
+
         setTimeout(() => {
-          setBulkOptimizationProgress({ 
-            current: 0, 
-            total: 0, 
-            currentProductTitle: "", 
-            isActive: false, 
-            completed: 0, 
-            failed: 0 
+          setBulkOptimizationProgress({
+            current: 0,
+            total: 0,
+            currentProductTitle: "",
+            isActive: false,
+            completed: 0,
+            failed: 0
           });
           setOptimizingProducts(new Set());
           setCompletedProducts(new Set());
@@ -649,11 +649,20 @@ export default function Products() {
               </BlockStack>
 
               <BlockStack gap="200" align="end">
-                <InlineStack gap="200" align="center">
-                  <Icon source={CreditCardIcon} tone="subdued" />
-                  <Text variant="bodyMd" fontWeight="semibold" as="span">
-                    {user.credits} credits remaining
-                  </Text>
+                <InlineStack gap="300" align="center">
+                  <Button
+                    variant="tertiary"
+                    size="slim"
+                    onClick={() => setShowSpecialInstructionsModal(true)}
+                  >
+                    Special Instructions
+                  </Button>
+                  <InlineStack gap="200" align="center">
+                    <Icon source={CreditCardIcon} tone="subdued" />
+                    <Text variant="bodyMd" fontWeight="semibold" as="span">
+                      {user.credits} credits remaining
+                    </Text>
+                  </InlineStack>
                 </InlineStack>
                 <Text variant="bodySm" tone="subdued" as="p">
                   Select products using checkboxes to enable bulk optimization
@@ -1136,6 +1145,54 @@ export default function Products() {
                   />
                 </BlockStack>
               </FormLayout>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
+
+        {/* Special Instructions Modal */}
+        <Modal
+          open={showSpecialInstructionsModal}
+          onClose={() => setShowSpecialInstructionsModal(false)}
+          title="Special Optimization Instructions"
+          primaryAction={{
+            content: "Save Instructions",
+            onAction: () => setShowSpecialInstructionsModal(false),
+          }}
+          secondaryActions={[
+            {
+              content: "Cancel",
+              onAction: () => setShowSpecialInstructionsModal(false),
+            },
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="400">
+              <Text variant="bodyMd" as="p">
+                Add custom instructions that will be included in every product optimization. These instructions will guide the AI to follow your specific requirements and brand guidelines.
+              </Text>
+
+              <TextField
+                label="Special Instructions"
+                value={specialInstructions}
+                onChange={setSpecialInstructions}
+                placeholder="e.g., Always emphasize eco-friendly materials, use casual tone, include size guide mentions, focus on durability..."
+                multiline={6}
+                helpText="These instructions will be applied to all optimizations (both quick and advanced)"
+                autoComplete="off"
+              />
+
+              {specialInstructions && (
+                <Card>
+                  <Box padding="300">
+                    <BlockStack gap="200">
+                      <Text variant="headingSm" as="h4">Preview</Text>
+                      <Text variant="bodySm" tone="subdued" as="p">
+                        Your special instructions: "{specialInstructions}"
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                </Card>
+              )}
             </BlockStack>
           </Modal.Section>
         </Modal>

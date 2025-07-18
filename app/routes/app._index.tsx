@@ -34,22 +34,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw new Response("Unauthorized", { status: 401 });
   }
 
-  // Get or create user
-  let user = await prisma.user.findUnique({
-    where: { shop: session.shop },
-    include: { keywords: true }
-  });
-
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        shop: session.shop,
-        plan: "free",
-        credits: 10,
-      },
-      include: { keywords: true }
-    });
-  }
+  // Get user data from database (user is guaranteed to exist from app.tsx loader)
+  const { ensureUserExists } = await import("../utils/db.server");
+  const user = await ensureUserExists(session.shop, true); // Include keywords
 
   return json({ user });
 };
@@ -208,7 +195,7 @@ export default function Index() {
                     >
                       Optimize Products
                     </Button>
-                  
+
                   </InlineStack>
                 </BlockStack>
               </Card>

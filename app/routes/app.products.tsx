@@ -83,15 +83,21 @@ interface OptimizationContext {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
 
-  // Mock user and subscription data for now
-  const user = {
-    id: session.shop,
-    plan: "basic",
-    credits: 100,
-  };
+  // Get real user data from database
+  const { getUserByShop, createUser } = await import("../models/user.server");
+  let user = await getUserByShop(session.shop);
+  
+  // Create user if they don't exist (first time using the app)
+  if (!user) {
+    user = await createUser({
+      shop: session.shop,
+      plan: "free",
+      credits: 10,
+    });
+  }
 
-  // Explicitly type subscription
-  const subscription: { planName: string } | null = null;
+  // Get subscription data
+  const subscription = user?.subscriptions?.[0] || null;
 
   const url = new URL(request.url);
   const query = url.searchParams.get("query") || "";
@@ -225,13 +231,17 @@ export default function Products() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [optimizingProducts, setOptimizingProducts] = useState<Set<string>>(new Set());
   const [completedProducts, setCompletedProducts] = useState<Set<string>>(new Set());
+  const [failedProducts, setFailedProducts] = useState<Set<string>>(new Set());
   const [currentOptimizingProduct, setCurrentOptimizingProduct] = useState<string | null>(null);
+  const [optimizationQueue, setOptimizationQueue] = useState<string[]>([]);
   const [bulkOptimizationProgress, setBulkOptimizationProgress] = useState<{
     current: number;
     total: number;
     currentProductTitle: string;
     isActive: boolean;
-  }>({ current: 0, total: 0, currentProductTitle: "", isActive: false });
+    completed: number;
+    failed: number;
+  }>({ current: 0, total: 0, currentProductTitle: "", isActive: false, completed: 0, failed: 0 });
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastError, setToastError] = useState(false);
@@ -300,48 +310,37 @@ export default function Products() {
   const handleOptimizeSelected = useCallback(() => {
     if (selectedItems.length === 0) return;
 
-    setOptimizingProducts(new Set(selectedItems));
+    // Initialize bulk optimization state
+    setOptimizationQueue([...selectedItems]);
+    setOptimizingProducts(new Set());
     setCompletedProducts(new Set());
+    setFailedProducts(new Set());
     setBulkOptimizationProgress({
       current: 0,
       total: selectedItems.length,
-      currentProductTitle: products.find(p => p.id === selectedItems[0])?.title || "Starting...",
-      isActive: true
+      currentProductTitle: "Starting bulk optimization...",
+      isActive: true,
+      completed: 0,
+      failed: 0
     });
-    optimizeFetcher.submit(
-      {
-        intent: "optimize",
-        productIds: JSON.stringify(selectedItems),
-      },
-      {
-        method: "POST",
-        action: "/api/optimize"
-      }
-    );
-  }, [selectedItems, optimizeFetcher, products]);
+  }, [selectedItems]);
 
   const handleOptimizeSingle = useCallback((productId: string) => {
-    setOptimizingProducts(new Set([productId]));
+    // Initialize single product optimization using the same queue system
+    setOptimizationQueue([productId]);
+    setOptimizingProducts(new Set());
     setCompletedProducts(new Set());
-    setCurrentOptimizingProduct(productId);
+    setFailedProducts(new Set());
     const productTitle = products.find(p => p.id === productId)?.title || "Unknown Product";
     setBulkOptimizationProgress({
       current: 0,
       total: 1,
       currentProductTitle: productTitle,
-      isActive: true
+      isActive: true,
+      completed: 0,
+      failed: 0
     });
-    optimizeFetcher.submit(
-      {
-        intent: "optimize",
-        productIds: JSON.stringify([productId]),
-      },
-      {
-        method: "POST",
-        action: "/api/optimize"
-      }
-    );
-  }, [optimizeFetcher, products]);
+  }, [products]);
 
   const handleAdvancedOptimize = useCallback((productIds: string[]) => {
     setPendingOptimizationIds(productIds);
@@ -349,28 +348,22 @@ export default function Products() {
   }, []);
 
   const handleAdvancedOptimizeSubmit = useCallback(() => {
-    setOptimizingProducts(new Set(pendingOptimizationIds));
+    // Initialize bulk optimization state for advanced optimization
+    setOptimizationQueue([...pendingOptimizationIds]);
+    setOptimizingProducts(new Set());
     setCompletedProducts(new Set());
+    setFailedProducts(new Set());
     setBulkOptimizationProgress({
       current: 0,
       total: pendingOptimizationIds.length,
-      currentProductTitle: products.find(p => p.id === pendingOptimizationIds[0])?.title || "Starting...",
-      isActive: true
+      currentProductTitle: "Starting advanced optimization...",
+      isActive: true,
+      completed: 0,
+      failed: 0
     });
-    optimizeFetcher.submit(
-      {
-        intent: "optimize",
-        productIds: JSON.stringify(pendingOptimizationIds),
-        context: JSON.stringify(advancedContext),
-      },
-      {
-        method: "POST",
-        action: "/api/optimize"
-      }
-    );
     setShowAdvancedModal(false);
     setPendingOptimizationIds([]);
-  }, [pendingOptimizationIds, advancedContext, optimizeFetcher, products]);
+  }, [pendingOptimizationIds]);
 
   const handleAdvancedContextChange = useCallback((field: keyof OptimizationContext, value: any) => {
     setAdvancedContext(prev => ({ ...prev, [field]: value }));
@@ -379,92 +372,146 @@ export default function Products() {
   // Handle optimization results
   const { data: fetcherData, state: fetcherState } = optimizeFetcher;
 
-  // Real-time progress updates based on actual optimization timing
+  // Queue processing effect - processes one product at a time
   useEffect(() => {
-    if (fetcherState === "submitting" && bulkOptimizationProgress.isActive) {
-      // Simulate progress based on estimated API call timing (3-5 seconds per product)
-      const estimatedTimePerProduct = 4000; // 4 seconds average
-      const totalProducts = bulkOptimizationProgress.total;
+    if (optimizationQueue.length > 0 && fetcherState === "idle" && !currentOptimizingProduct) {
+      const nextProductId = optimizationQueue[0];
+      const nextProduct = products.find(p => p.id === nextProductId);
+      
+      if (nextProduct) {
+        // Remove from queue and start optimizing
+        setOptimizationQueue(prev => prev.slice(1));
+        setCurrentOptimizingProduct(nextProductId);
+        setOptimizingProducts(prev => new Set([...prev, nextProductId]));
+        
+        // Update progress
+        setBulkOptimizationProgress(prev => ({
+          ...prev,
+          current: prev.total - optimizationQueue.length + 1,
+          currentProductTitle: nextProduct.title
+        }));
 
-      const interval = setInterval(() => {
-        setBulkOptimizationProgress(prev => {
-          if (prev.current < prev.total && fetcherState === "submitting") {
-            const nextIndex = Math.min(prev.current + 1, prev.total);
-            const productIds = Array.from(optimizingProducts);
-            const nextProductId = productIds[nextIndex - 1];
-            const nextProduct = products.find(p => p.id === nextProductId);
-
-            // Mark previous product as completed if we're moving to next
-            if (prev.current > 0 && nextIndex > prev.current) {
-              const completedProductId = productIds[prev.current - 1];
-              setCompletedProducts(prevCompleted => new Set([...prevCompleted, completedProductId]));
-            }
-
-            return {
-              ...prev,
-              current: nextIndex,
-              currentProductTitle: nextProduct?.title || `Product ${nextIndex}`
-            };
+        // Submit optimization request for single product
+        optimizeFetcher.submit(
+          {
+            intent: "optimize",
+            productIds: JSON.stringify([nextProductId]),
+            context: JSON.stringify(advancedContext),
+          },
+          {
+            method: "POST",
+            action: "/api/optimize"
           }
-          return prev;
-        });
-      }, estimatedTimePerProduct);
-
-      return () => clearInterval(interval);
+        );
+      }
     }
-  }, [fetcherState, bulkOptimizationProgress.isActive, optimizingProducts, products]);
+  }, [optimizationQueue, fetcherState, currentOptimizingProduct, products, optimizeFetcher, advancedContext]);
 
-  // Handle optimization completion
+
+
+  // Handle optimization completion for individual products
   useEffect(() => {
-    if ((fetcherData as any)?.results && optimizingProducts.size > 0) {
-      const results = (fetcherData as any).results;
-      const successCount = results.filter((r: any) => r.success).length;
-      const errorCount = results.filter((r: any) => !r.success).length;
+    if (fetcherData && currentOptimizingProduct && fetcherState === "idle") {
+      const results = (fetcherData as any)?.results;
+      
+      if (results && results.length > 0) {
+        const result = results[0]; // Single product result
+        
+        // Remove from optimizing and add to appropriate set
+        setOptimizingProducts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(currentOptimizingProduct);
+          return newSet;
+        });
 
-      // Immediately update progress to 100% when API completes
+        if (result.success) {
+          setCompletedProducts(prev => new Set([...prev, currentOptimizingProduct]));
+          setBulkOptimizationProgress(prev => ({
+            ...prev,
+            completed: prev.completed + 1
+          }));
+        } else {
+          setFailedProducts(prev => new Set([...prev, currentOptimizingProduct]));
+          setBulkOptimizationProgress(prev => ({
+            ...prev,
+            failed: prev.failed + 1
+          }));
+        }
+
+        // Clear current optimizing product to allow next in queue
+        setCurrentOptimizingProduct(null);
+
+        // Check if this was the last product in the queue
+        if (optimizationQueue.length === 0) {
+          const totalCompleted = completedProducts.size + (result.success ? 1 : 0);
+          const totalFailed = failedProducts.size + (!result.success ? 1 : 0);
+          
+          // Show completion message
+          if (totalCompleted > 0) {
+            setToastMessage(`Successfully optimized ${totalCompleted} product(s)${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`);
+            setToastError(totalFailed > 0);
+            setShowToast(true);
+          }
+
+          // Reset states after completion
+          setTimeout(() => {
+            setBulkOptimizationProgress({ 
+              current: 0, 
+              total: 0, 
+              currentProductTitle: "", 
+              isActive: false, 
+              completed: 0, 
+              failed: 0 
+            });
+            setOptimizingProducts(new Set());
+            setCompletedProducts(new Set());
+            setFailedProducts(new Set());
+            setSelectedItems([]);
+          }, 3000);
+        }
+      }
+    }
+  }, [fetcherData, fetcherState, currentOptimizingProduct, optimizationQueue.length, completedProducts.size, failedProducts.size]);
+
+  // Handle fetch state changes and errors
+  useEffect(() => {
+    if (fetcherState === "idle" && bulkOptimizationProgress.isActive && currentOptimizingProduct && !(fetcherData as any)?.results) {
+      // Handle case where fetch fails or returns no results
+      setFailedProducts(prev => new Set([...prev, currentOptimizingProduct]));
       setBulkOptimizationProgress(prev => ({
         ...prev,
-        current: prev.total,
-        currentProductTitle: "Optimization Complete!"
+        failed: prev.failed + 1
       }));
-
-      // Mark all optimizing products as completed
-      setCompletedProducts(new Set(Array.from(optimizingProducts)));
-
-      if (successCount > 0) {
-        setToastMessage(`Successfully optimized ${successCount} product(s)`);
-        setToastError(false);
-        setShowToast(true);
-      }
-
-      if (errorCount > 0) {
-        setToastMessage(`Failed to optimize ${errorCount} product(s)`);
+      setOptimizingProducts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(currentOptimizingProduct);
+        return newSet;
+      });
+      setCurrentOptimizingProduct(null);
+      
+      // Show error toast if this was the last product
+      if (optimizationQueue.length === 0) {
+        setToastMessage(`Optimization failed for some products`);
         setToastError(true);
         setShowToast(true);
+        
+        setTimeout(() => {
+          setBulkOptimizationProgress({ 
+            current: 0, 
+            total: 0, 
+            currentProductTitle: "", 
+            isActive: false, 
+            completed: 0, 
+            failed: 0 
+          });
+          setOptimizingProducts(new Set());
+          setCompletedProducts(new Set());
+          setFailedProducts(new Set());
+          setSelectedItems([]);
+        }, 3000);
       }
-
-      // Reset all optimization states after showing completion
-      setTimeout(() => {
-        setOptimizingProducts(new Set());
-        setCompletedProducts(new Set());
-        setCurrentOptimizingProduct(null);
-        setBulkOptimizationProgress({ current: 0, total: 0, currentProductTitle: "", isActive: false });
-        setSelectedItems([]);
-      }, 3000); // Keep completed state visible for 3 seconds
     }
-  }, [fetcherData, optimizingProducts.size]);
-
-  // Handle fetch state changes
-  useEffect(() => {
-    if (fetcherState === "idle" && bulkOptimizationProgress.isActive && !(fetcherData as any)?.results) {
-      // Reset if fetch fails or is cancelled
-      setTimeout(() => {
-        setBulkOptimizationProgress({ current: 0, total: 0, currentProductTitle: "", isActive: false });
-        setOptimizingProducts(new Set());
-        setCompletedProducts(new Set());
-      }, 1000);
-    }
-  }, [fetcherState, bulkOptimizationProgress.isActive, fetcherData]);
+  }, [fetcherState, bulkOptimizationProgress.isActive, fetcherData, currentOptimizingProduct, optimizationQueue.length]);
 
   const filters = [
     {
@@ -601,9 +648,17 @@ export default function Products() {
                 </Text>
               </BlockStack>
 
-              <Text variant="bodySm" tone="subdued" as="p">
-                Select products using checkboxes to enable bulk optimization
-              </Text>
+              <BlockStack gap="200" align="end">
+                <InlineStack gap="200" align="center">
+                  <Icon source={CreditCardIcon} tone="subdued" />
+                  <Text variant="bodyMd" fontWeight="semibold" as="span">
+                    {user.credits} credits remaining
+                  </Text>
+                </InlineStack>
+                <Text variant="bodySm" tone="subdued" as="p">
+                  Select products using checkboxes to enable bulk optimization
+                </Text>
+              </BlockStack>
             </InlineStack>
           </Box>
         </Card>
@@ -620,8 +675,8 @@ export default function Products() {
                     </Text>
                     <Text variant="bodyMd" tone="subdued" as="p">
                       {bulkOptimizationProgress.current === bulkOptimizationProgress.total
-                        ? `All ${bulkOptimizationProgress.total} products optimized!`
-                        : `Optimizing ${bulkOptimizationProgress.current} of ${bulkOptimizationProgress.total} products`
+                        ? `All ${bulkOptimizationProgress.total} products processed!`
+                        : `Processing ${bulkOptimizationProgress.current} of ${bulkOptimizationProgress.total} products`
                       }
                     </Text>
                   </BlockStack>
@@ -653,16 +708,61 @@ export default function Products() {
                   }} />
                 </div>
 
-                <InlineStack gap="200" align="center">
-                  {bulkOptimizationProgress.current < bulkOptimizationProgress.total && (
-                    <Spinner size="small" />
-                  )}
-                  <Text variant="bodySm" tone="subdued" as="span">
-                    {bulkOptimizationProgress.current === bulkOptimizationProgress.total
-                      ? <strong>✅ {bulkOptimizationProgress.currentProductTitle}</strong>
-                      : <>Currently optimizing: <strong>{bulkOptimizationProgress.currentProductTitle}</strong></>
-                    }
-                  </Text>
+                <InlineStack gap="400" align="space-between">
+                  <InlineStack gap="200" align="center">
+                    {bulkOptimizationProgress.current < bulkOptimizationProgress.total && (
+                      <Spinner size="small" />
+                    )}
+                    <Text variant="bodySm" tone="subdued" as="span">
+                      {bulkOptimizationProgress.current === bulkOptimizationProgress.total
+                        ? <strong>✅ {bulkOptimizationProgress.currentProductTitle}</strong>
+                        : <>Currently optimizing: <strong>{bulkOptimizationProgress.currentProductTitle}</strong></>
+                      }
+                    </Text>
+                  </InlineStack>
+
+                  {/* Queue Status */}
+                  <InlineStack gap="300">
+                    {bulkOptimizationProgress.completed > 0 && (
+                      <InlineStack gap="100" align="center">
+                        <div style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: "var(--p-color-bg-success)"
+                        }} />
+                        <Text variant="bodySm" tone="success" as="span">
+                          {bulkOptimizationProgress.completed} completed
+                        </Text>
+                      </InlineStack>
+                    )}
+                    {bulkOptimizationProgress.failed > 0 && (
+                      <InlineStack gap="100" align="center">
+                        <div style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: "var(--p-color-bg-critical)"
+                        }} />
+                        <Text variant="bodySm" tone="critical" as="span">
+                          {bulkOptimizationProgress.failed} failed
+                        </Text>
+                      </InlineStack>
+                    )}
+                    {optimizationQueue.length > 0 && (
+                      <InlineStack gap="100" align="center">
+                        <div style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: "var(--p-color-bg-info)"
+                        }} />
+                        <Text variant="bodySm" tone="subdued" as="span">
+                          {optimizationQueue.length} in queue
+                        </Text>
+                      </InlineStack>
+                    )}
+                  </InlineStack>
                 </InlineStack>
               </BlockStack>
             </Box>

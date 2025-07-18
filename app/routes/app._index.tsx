@@ -193,7 +193,7 @@ export default function Index() {
                 <BlockStack gap="500">
                   <BlockStack gap="200">
                     <Text as="h2" variant="headingMd">
-                      Welcome to AI Product Optimizer 🚀
+                      Welcome to b1 your Bulk AI Product Optimizer 💫
                     </Text>
                     <Text variant="bodyMd" as="p">
                       Optimize your Shopify products with AI-powered SEO using 2025 best practices.
@@ -208,13 +208,7 @@ export default function Index() {
                     >
                       Optimize Products
                     </Button>
-                    <Button
-                      url="https://docs.shopify.com/apps"
-                      target="_blank"
-                      variant="secondary"
-                    >
-                      View Documentation
-                    </Button>
+                  
                   </InlineStack>
                 </BlockStack>
               </Card>

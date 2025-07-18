@@ -1,10 +1,11 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
-import { 
-  getUserByShop, 
-  updateUserCredits, 
-  getCreditsForPlan 
+import {
+  getUserByShop,
+  createUser,
+  updateUserCredits,
+  getCreditsForPlan
 } from "../models/user.server";
 import { getCurrentSubscription } from "../utils/billing.server";
 
@@ -154,7 +155,7 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
 
   const data = await response.json();
   const content = data.choices[0]?.message?.content;
-  
+
   if (!content) {
     console.error("OpenRouter response:", data);
     throw new Error("No content received from AI");
@@ -164,20 +165,20 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
     // Clean the content in case there's any markdown formatting
     const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleanContent);
-    
+
     // Validate required fields
     if (!parsed.title || !parsed.description || !parsed.productType || !parsed.tags || !parsed.handle) {
       console.error("Incomplete AI response:", parsed);
       throw new Error("AI response missing required fields");
     }
-    
+
     // Set vendor to empty if it's AliExpress or similar marketplace names
-    if (parsed.vendor && (parsed.vendor.toLowerCase().includes('aliexpress') || 
-                         parsed.vendor.toLowerCase().includes('alibaba') ||
-                         parsed.vendor.toLowerCase().includes('dhgate'))) {
+    if (parsed.vendor && (parsed.vendor.toLowerCase().includes('aliexpress') ||
+      parsed.vendor.toLowerCase().includes('alibaba') ||
+      parsed.vendor.toLowerCase().includes('dhgate'))) {
       parsed.vendor = "";
     }
-    
+
     return parsed;
   } catch (error) {
     console.error("JSON parsing error:", error);
@@ -195,9 +196,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "optimize") {
     // Check credits and billing before processing
-    const user = await getUserByShop(session.shop);
+    let user = await getUserByShop(session.shop);
     if (!user) {
-      return json({ error: "User not found" }, { status: 404 });
+      // Create user if they don't exist (first time using the app)
+      const newUser = await createUser({
+        shop: session.shop,
+        plan: "free",
+        credits: 10,
+      });
+      console.log(`🆕 Created new user for shop: ${session.shop}`);
+
+      // Handle case where user creation fails
+      if (!newUser) {
+        return json({ error: "Failed to create user account" }, { status: 500 });
+      }
+
+      // Fetch the complete user object with subscriptions
+      user = await getUserByShop(session.shop);
+      if (!user) {
+        return json({ error: "Failed to retrieve user account after creation" }, { status: 500 });
+      }
     }
 
     const requiredCredits = productIds.length;
@@ -216,8 +234,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (!hasEnoughCredits) {
-      return json({ 
-        error: "Insufficient credits", 
+      return json({
+        error: "Insufficient credits",
         creditsNeeded: requiredCredits,
         creditsAvailable: user.credits,
         message: "You need more credits to optimize these products. Please upgrade your plan or wait for credits to reset."
@@ -225,11 +243,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     const results = [];
     console.log(`🚀 Starting optimization for ${productIds.length} product(s) via API route`);
-    
+
     for (let i = 0; i < productIds.length; i++) {
       const productId = productIds[i];
       console.log(`📦 Optimizing product ${i + 1}/${productIds.length}: ${productId}`);
-      
+
       try {
         // First, get the current product data
         const productResponse = await admin.graphql(
@@ -313,16 +331,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         const updateData = await updateResponse.json();
         console.log("📋 Shopify update response:", JSON.stringify(updateData, null, 2));
-        
+
         const userErrors = updateData.data?.productUpdate?.userErrors;
         const updatedProduct = updateData.data?.productUpdate?.product;
 
         if (userErrors && userErrors.length > 0) {
           console.error("❌ Shopify update errors:", userErrors);
-          results.push({ 
-            productId, 
-            success: false, 
-            error: userErrors.map((e: any) => e.message).join(", ") 
+          results.push({
+            productId,
+            success: false,
+            error: userErrors.map((e: any) => e.message).join(", ")
           });
         } else if (updatedProduct) {
           console.log(`🎉 Successfully optimized and updated product: ${updatedProduct.title}`);
@@ -337,13 +355,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           results.push({ productId, success: true, optimizedData, updatedProduct });
         } else {
           console.error("❌ No product returned from update mutation");
-          results.push({ 
-            productId, 
-            success: false, 
-            error: "No product returned from update mutation" 
+          results.push({
+            productId,
+            success: false,
+            error: "No product returned from update mutation"
           });
         }
-        
+
         // Small delay between API calls to respect rate limits
         if (i < productIds.length - 1) {
           console.log("⏱️ Waiting 1 second before next optimization...");
@@ -351,10 +369,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       } catch (error) {
         console.error(`❌ Error optimizing product ${productId}:`, error);
-        results.push({ 
-          productId, 
-          success: false, 
-          error: error instanceof Error ? error.message : "Unknown error" 
+        results.push({
+          productId,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error"
         });
       }
     }
@@ -368,7 +386,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     console.log(`🏁 Optimization complete! Results: ${results.filter(r => r.success).length} successful, ${results.filter(r => !r.success).length} failed`);
-    return json({ 
+    return json({
       results,
       creditsUsed: successfulOptimizations,
       creditsRemaining: user.credits - successfulOptimizations

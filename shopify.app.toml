@@ -1,0 +1,40 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "fa9d90437a467b7215e296d9eb003d7d"
+name = "B1: Bulk Product SEO Optimizer"
+handle = "b1-bulk-product-seo-optimizer"
+application_url = "https://msgid-glenn-suffer-larry.trycloudflare.com"
+embedded = true
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2025-07"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "customers/redact" ]
+  uri = "/webhooks/customers/redact"
+
+  [[webhooks.subscriptions]]
+  topics = [ "shop/redact" ]
+  uri = "/webhooks/shop/redact"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products"
+
+[auth]
+redirect_urls = ["https://msgid-glenn-suffer-larry.trycloudflare.com/auth/callback", "https://msgid-glenn-suffer-larry.trycloudflare.com/auth/shopify/callback", "https://msgid-glenn-suffer-larry.trycloudflare.com/api/auth/callback"]
+
+[pos]
+embedded = false

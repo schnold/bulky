@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model User {
+  id                  String        @id @default(cuid())
+  shop                String        @unique
+  plan                String        @default("free") // free, starter, pro, enterprise
+  credits             Int           @default(10) // optimization credits
+  onboardingCompleted Boolean       @default(false)
+  keywords            Keyword[]
+  subscriptions       Subscription[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model Subscription {
+  id                    String    @id @default(cuid())
+  shopifySubscriptionId String    @unique // Shopify's subscription ID
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planName              String    // starter, pro, enterprise
+  status                String    // active, cancelled, expired, pending
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  trialStart            DateTime?
+  trialEnd              DateTime?
+  cancelledAt           DateTime?
+  isTest                Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Keyword {
+  id        String   @id @default(cuid())
+  keyword   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, keyword]) // Prevent duplicate keywords per user
+}

@@ -12,9 +12,9 @@ export const handler = async (event, context) => {
     console.log(`🌐 Request: ${event.httpMethod} ${event.path}`);
     console.log(`🔍 Headers:`, JSON.stringify(event.headers, null, 2));
     
-    // Ensure DATABASE_URL is available
-    if (!process.env.DATABASE_URL) {
-      console.error("❌ DATABASE_URL environment variable is not set");
+    // Ensure NETLIFY_DATABASE_URL is available
+    if (!process.env.NETLIFY_DATABASE_URL) {
+      console.error("❌ NETLIFY_DATABASE_URL environment variable is not set");
       return {
         statusCode: 500,
         body: JSON.stringify({ error: "Database configuration error" }),

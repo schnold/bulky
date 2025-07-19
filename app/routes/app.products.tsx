@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams, useFetcher } from "@remix-run/react";
@@ -31,6 +31,7 @@ import {
 import { MagicIcon, CheckIcon, CreditCardIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import { ClientOnly } from "../components/ClientOnly";
 
 interface Product {
   id: string;
@@ -629,9 +630,15 @@ export default function Products() {
   ) : null;
 
   return (
-    <Frame>
+    <ClientOnly fallback={
       <Page>
         <TitleBar title="Products" />
+        <div>Loading...</div>
+      </Page>
+    }>
+      <Frame>
+        <Page>
+          <TitleBar title="Products" />
 
 
 
@@ -1196,7 +1203,8 @@ export default function Products() {
             </BlockStack>
           </Modal.Section>
         </Modal>
-      </Page>
-    </Frame>
+        </Page>
+      </Frame>
+    </ClientOnly>
   );
 }

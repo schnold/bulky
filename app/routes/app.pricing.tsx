@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import { useLoaderData, useActionData, useNavigation } from "@remix-run/react";
 import {
   Page,
   Card,
@@ -15,11 +15,11 @@ import {
   Icon,
   Grid,
   Banner,
-  Spinner,
   Toast,
   Frame,
   Collapsible,
 } from "@shopify/polaris";
+import { ClientOnly } from "../components/ClientOnly";
 import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -231,9 +231,7 @@ const PricingCard = ({
 }) => {
   return (
     <Card border={true}>
-      <Box
-        padding="600"
-        minHeight="100%"
+      <div
         style={{
           background: isPopular
             ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
@@ -242,94 +240,97 @@ const PricingCard = ({
               : undefined,
           borderRadius: '12px',
           position: 'relative' as const,
+          minHeight: '100%',
         }}
       >
-        <BlockStack gap="500">
-          {/* Header */}
-          <Box>
-            <BlockStack gap="300">
-              <InlineStack align="space-between" blockAlign="start">
-                <Text variant="headingLg" as="h3" tone={isPopular ? "magic" : undefined}>
-                  {title}
-                </Text>
-                {isPopular && (
-                  <Badge tone="magic" size="small">
-                    Most Popular
-                  </Badge>
-                )}
-                {isFree && (
-                  <Badge tone="success" size="small">
-                    Free Forever
-                  </Badge>
-                )}
-              </InlineStack>
-
-              <Box>
-                <InlineStack gap="100" blockAlign="end">
-                  <Text
-                    variant="heading2xl"
-                    as="p"
-                    tone={isPopular ? "magic" : isFree ? "success" : undefined}
-                  >
-                    {price}
+        <Box padding="600">
+          <BlockStack gap="500">
+            {/* Header */}
+            <Box>
+              <BlockStack gap="300">
+                <InlineStack align="space-between" blockAlign="start">
+                  <Text variant="headingLg" as="h3" tone={isPopular ? "magic" : undefined}>
+                    {title}
                   </Text>
-                  {period && (
-                    <Text variant="bodyMd" tone="subdued" as="p">
-                      {period}
-                    </Text>
+                  {isPopular && (
+                    <Badge tone="magic" size="small">
+                      Most Popular
+                    </Badge>
+                  )}
+                  {isFree && (
+                    <Badge tone="success" size="small">
+                      Free Forever
+                    </Badge>
                   )}
                 </InlineStack>
-              </Box>
 
-              <Text variant="bodyMd" tone="subdued" as="p">
-                {description}
-              </Text>
-            </BlockStack>
-          </Box>
-
-          <Divider />
-
-          {/* Features */}
-          <Box>
-            <BlockStack gap="300">
-              {planFeatures.map((feature, index) => (
-                <InlineStack key={index} gap="300" align="start" wrap={false}>
-                  <Box paddingBlockStart="050" minWidth="24px">
-                    <FeatureIcon included={features[index]} />
-                  </Box>
-                  <Box>
-                    <BlockStack gap="100">
-                      <Text variant="bodyMd" breakWord as="p">
-                        {feature.name}
+                <Box>
+                  <InlineStack gap="100" blockAlign="end">
+                    <Text
+                      variant="heading2xl"
+                      as="p"
+                      tone={isPopular ? "magic" : isFree ? "success" : undefined}
+                    >
+                      {price}
+                    </Text>
+                    {period && (
+                      <Text variant="bodyMd" tone="subdued" as="p">
+                        {period}
                       </Text>
-                      {typeof features[index] === "string" && features[index] !== true && (
-                        <Text variant="bodySm" tone="subdued" as="p">
-                          {features[index]}
-                        </Text>
-                      )}
-                    </BlockStack>
-                  </Box>
-                </InlineStack>
-              ))}
-            </BlockStack>
-          </Box>
+                    )}
+                  </InlineStack>
+                </Box>
 
-          {/* CTA Button */}
-          <Box paddingBlockStart="500">
-            <Button
-              variant={isPopular ? "primary" : buttonVariant}
-              size="large"
-              fullWidth
-              onClick={onSubscribe}
-              loading={loading}
-              disabled={isCurrentPlan}
-              tone={isFree ? "success" : undefined}
-            >
-              {isCurrentPlan ? "Current Plan" : buttonText}
-            </Button>
-          </Box>
-        </BlockStack>
-      </Box>
+                <Text variant="bodyMd" tone="subdued" as="p">
+                  {description}
+                </Text>
+              </BlockStack>
+            </Box>
+
+            <Divider />
+
+            {/* Features */}
+            <Box>
+              <BlockStack gap="300">
+                {planFeatures.map((feature, index) => (
+                  <InlineStack key={index} gap="300" align="start" wrap={false}>
+                    <Box paddingBlockStart="050" minWidth="24px">
+                      <FeatureIcon included={features[index]} />
+                    </Box>
+                    <Box>
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" breakWord as="p">
+                          {feature.name}
+                        </Text>
+                        {typeof features[index] === "string" && (
+                          <Text variant="bodySm" tone="subdued" as="p">
+                            {features[index]}
+                          </Text>
+                        )}
+                      </BlockStack>
+                    </Box>
+                  </InlineStack>
+                ))}
+              </BlockStack>
+            </Box>
+
+            {/* CTA Button */}
+            <Box paddingBlockStart="500">
+              <Button
+                variant={isPopular ? "primary" : buttonVariant}
+                size="large"
+                fullWidth
+                onClick={onSubscribe}
+                loading={loading}
+                disabled={isCurrentPlan}
+                tone={isFree ? "success" : undefined}
+              >
+                {isCurrentPlan ? "Current Plan" : buttonText}
+              </Button>
+            </Box>
+          </BlockStack>
+        </Box>
+      </div>
     </Card>
   );
 };
@@ -447,153 +448,158 @@ export default function Pricing() {
     }
   };
 
-  const toastMarkup = (actionData?.success && showToast) ? (
+  const toastMarkup = (actionData && 'success' in actionData && actionData.success && showToast) ? (
     <Toast
-      content={actionData.message || "Plan updated successfully!"}
+      content={('message' in actionData && typeof actionData.message === 'string' ? actionData.message : null) || "Plan updated successfully!"}
       onDismiss={() => setShowToast(false)}
     />
   ) : null;
 
   return (
-    <Frame>
+    <ClientOnly fallback={
       <Page>
         <TitleBar title="Pricing & Plans" />
+        <div>Loading...</div>
+      </Page>
+    }>
+      <Frame>
+        <Page>
+          <TitleBar title="Pricing & Plans" />
 
-        {/* Header Section */}
-        <Box
-          style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '16px',
-            color: 'white'
-          }}
-        >
-          <Box padding="800">
-            <BlockStack gap="500" align="center">
-              <Text variant="heading2xl" as="h1" alignment="center" tone="text-inverse">
-                Choose Your SEO Optimization Plan
-              </Text>
-              <Text variant="bodyLg" alignment="center" tone="text-inverse" as="p">
-                Transform your Shopify store with AI-powered SEO optimization.
-                <br />
-                Start free and scale as you grow.
-              </Text>
-
-              {currentSubscription && (
-                <Box paddingBlockStart="400">
-                  <Banner
-                    title={`Currently on ${currentSubscription.planName}`}
-                    tone="info"
-                    action={{
-                      content: "Cancel Subscription",
-                      onAction: handleCancel,
-                    }}
-                  >
-                    <Text as="p">
-                      You have {user.credits} optimization credits remaining this month.
-                    </Text>
-                  </Banner>
-                </Box>
-              )}
-            </BlockStack>
-          </Box>
-        </Box>
-
-        {/* Pricing Cards */}
-        <Box paddingBlockStart="800">
-          <Grid columns={{ xs: 1, sm: 1, md: 2, lg: 4 }} gap="600">
-            <Grid.Cell>
-              <PricingCard
-                title="Free"
-                price="$0"
-                period=""
-                description="Perfect for trying out our SEO optimization"
-                features={planFeatures.map(f => f.free)}
-                buttonText="Get Started Free"
-                buttonVariant="secondary"
-                isFree={true}
-                isCurrentPlan={currentSubscription?.planName === FREE_PLAN}
-                onSubscribe={() => handleSubscribe(FREE_PLAN)}
-                loading={isLoading}
-              />
-            </Grid.Cell>
-
-            <Grid.Cell>
-              <PricingCard
-                title="Starter"
-                price="$9.99"
-                period="per month"
-                description="Perfect for small stores getting started with SEO"
-                features={planFeatures.map(f => f.starter)}
-                buttonText="Get Started"
-                buttonVariant="secondary"
-                isCurrentPlan={currentSubscription?.planName === STARTER_PLAN}
-                onSubscribe={() => handleSubscribe(STARTER_PLAN)}
-                loading={isLoading}
-              />
-            </Grid.Cell>
-
-            <Grid.Cell>
-              <PricingCard
-                title="Pro"
-                price="$29.99"
-                period="per month"
-                description="For growing stores that need advanced SEO features"
-                features={planFeatures.map(f => f.pro)}
-                buttonText="Get Started"
-                buttonVariant="primary"
-                isPopular={true}
-                isCurrentPlan={currentSubscription?.planName === PRO_PLAN}
-                onSubscribe={() => handleSubscribe(PRO_PLAN)}
-                loading={isLoading}
-              />
-            </Grid.Cell>
-
-            <Grid.Cell>
-              <PricingCard
-                title="Enterprise"
-                price="$59.99"
-                period="per month"
-                description="For large stores with unlimited optimization needs"
-                features={planFeatures.map(f => f.enterprise)}
-                buttonText="Contact Sales"
-                buttonVariant="secondary"
-                isCurrentPlan={currentSubscription?.planName === ENTERPRISE_PLAN}
-                onSubscribe={() => handleSubscribe(ENTERPRISE_PLAN)}
-                loading={isLoading}
-              />
-            </Grid.Cell>
-          </Grid>
-        </Box>
-
-        {/* FAQ Section */}
-        <Box paddingBlockStart="1000">
-          <Card>
+          {/* Header Section */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: '16px',
+              color: 'white'
+            }}
+          >
             <Box padding="800">
-              <BlockStack gap="800">
-                <Text variant="heading2xl" as="h2" alignment="center">
-                  Frequently Asked Questions
+              <BlockStack gap="500" align="center">
+                <Text variant="heading2xl" as="h1" alignment="center" tone="text-inverse">
+                  Choose Your SEO Optimization Plan
+                </Text>
+                <Text variant="bodyLg" alignment="center" tone="text-inverse" as="p">
+                  Transform your Shopify store with AI-powered SEO optimization.
+                  <br />
+                  Start free and scale as you grow.
                 </Text>
 
-                <BlockStack gap="400">
-                  {faqData.map((faq, index) => (
-                    <FAQItem
-                      key={index}
-                      question={faq.question}
-                      answer={faq.answer}
-                      isOpen={openFAQ === index}
-                      onToggle={() => setOpenFAQ(openFAQ === index ? null : index)}
-                    />
-                  ))}
-                </BlockStack>
+                {currentSubscription && (
+                  <Box paddingBlockStart="400">
+                    <Banner
+                      title={`Currently on ${currentSubscription.planName}`}
+                      tone="info"
+                      action={{
+                        content: "Cancel Subscription",
+                        onAction: handleCancel,
+                      }}
+                    >
+                      <Text as="p">
+                        You have {user.credits} optimization credits remaining this month.
+                      </Text>
+                    </Banner>
+                  </Box>
+                )}
               </BlockStack>
             </Box>
-          </Card>
-        </Box>
+          </div>
 
+          {/* Pricing Cards */}
+          <Box paddingBlockStart="800">
+            <Grid columns={{ xs: 1, sm: 1, md: 2, lg: 4 }} gap={{ xs: "400", sm: "500", md: "600", lg: "600" }}>
+              <Grid.Cell>
+                <PricingCard
+                  title="Free"
+                  price="$0"
+                  period=""
+                  description="Perfect for trying out our SEO optimization"
+                  features={planFeatures.map(f => f.free)}
+                  buttonText="Get Started Free"
+                  buttonVariant="secondary"
+                  isFree={true}
+                  isCurrentPlan={currentSubscription?.planName === FREE_PLAN}
+                  onSubscribe={() => handleSubscribe(FREE_PLAN)}
+                  loading={isLoading}
+                />
+              </Grid.Cell>
 
+              <Grid.Cell>
+                <PricingCard
+                  title="Starter"
+                  price="$9.99"
+                  period="per month"
+                  description="Perfect for small stores getting started with SEO"
+                  features={planFeatures.map(f => f.starter)}
+                  buttonText="Get Started"
+                  buttonVariant="secondary"
+                  isCurrentPlan={currentSubscription?.planName === STARTER_PLAN}
+                  onSubscribe={() => handleSubscribe(STARTER_PLAN)}
+                  loading={isLoading}
+                />
+              </Grid.Cell>
 
-        {toastMarkup}
-      </Page>
-    </Frame>
+              <Grid.Cell>
+                <PricingCard
+                  title="Pro"
+                  price="$29.99"
+                  period="per month"
+                  description="For growing stores that need advanced SEO features"
+                  features={planFeatures.map(f => f.pro)}
+                  buttonText="Get Started"
+                  buttonVariant="primary"
+                  isPopular={true}
+                  isCurrentPlan={currentSubscription?.planName === PRO_PLAN}
+                  onSubscribe={() => handleSubscribe(PRO_PLAN)}
+                  loading={isLoading}
+                />
+              </Grid.Cell>
+
+              <Grid.Cell>
+                <PricingCard
+                  title="Enterprise"
+                  price="$59.99"
+                  period="per month"
+                  description="For large stores with unlimited optimization needs"
+                  features={planFeatures.map(f => f.enterprise)}
+                  buttonText="Contact Sales"
+                  buttonVariant="secondary"
+                  isCurrentPlan={currentSubscription?.planName === ENTERPRISE_PLAN}
+                  onSubscribe={() => handleSubscribe(ENTERPRISE_PLAN)}
+                  loading={isLoading}
+                />
+              </Grid.Cell>
+            </Grid>
+          </Box>
+
+          {/* FAQ Section */}
+          <Box paddingBlockStart="1000">
+            <Card>
+              <Box padding="800">
+                <BlockStack gap="800">
+                  <Text variant="heading2xl" as="h2" alignment="center">
+                    Frequently Asked Questions
+                  </Text>
+
+                  <BlockStack gap="400">
+                    {faqData.map((faq, index) => (
+                      <FAQItem
+                        key={index}
+                        question={faq.question}
+                        answer={faq.answer}
+                        isOpen={openFAQ === index}
+                        onToggle={() => setOpenFAQ(openFAQ === index ? null : index)}
+                      />
+                    ))}
+                  </BlockStack>
+                </BlockStack>
+              </Box>
+            </Card>
+          </Box>
+
+          {toastMarkup}
+        </Page>
+      </Frame>
+    </ClientOnly>
   );
 }

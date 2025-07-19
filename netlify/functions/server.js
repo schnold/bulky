@@ -16,6 +16,18 @@ if (typeof window === "undefined") {
   global.window = {};
   global.document = {};
   
+  // Add matchMedia polyfill for Polaris components
+  global.window.matchMedia = global.window.matchMedia || function() {
+    return {
+      matches: false,
+      addListener: function() {},
+      removeListener: function() {},
+      addEventListener: function() {},
+      removeEventListener: function() {},
+      dispatchEvent: function() { return false; }
+    };
+  };
+  
   // Only set navigator if it doesn't already exist or is not read-only
   if (typeof global.navigator === "undefined") {
     try {

@@ -6,10 +6,17 @@ interface ClientOnlyProps {
 }
 
 export function ClientOnly({ children, fallback = null }: ClientOnlyProps) {
-  // Use a simple check for client-side rendering
-  if (typeof window === "undefined") {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // During SSR and initial hydration, return the fallback
+  if (!isClient) {
     return <>{fallback}</>;
   }
 
+  // On client, render the children
   return <>{children}</>;
 }

@@ -14,6 +14,7 @@ import polarisTranslations from "@shopify/polaris/locales/en.json";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { login } from "../../shopify.server";
+import { ClientOnly } from "../../components/ClientOnly";
 
 import { loginErrorMessage } from "./error.server";
 
@@ -40,29 +41,31 @@ export default function Auth() {
   const { errors } = actionData || loaderData;
 
   return (
-    <PolarisAppProvider i18n={loaderData.polarisTranslations}>
-      <Page>
-        <Card>
-          <Form method="post">
-            <FormLayout>
-              <Text variant="headingMd" as="h2">
-                Log in
-              </Text>
-              <TextField
-                type="text"
-                name="shop"
-                label="Shop domain"
-                helpText="example.myshopify.com"
-                value={shop}
-                onChange={setShop}
-                autoComplete="on"
-                error={errors.shop}
-              />
-              <Button submit>Log in</Button>
-            </FormLayout>
-          </Form>
-        </Card>
-      </Page>
-    </PolarisAppProvider>
+    <ClientOnly fallback={<div>Loading...</div>}>
+      <PolarisAppProvider i18n={loaderData.polarisTranslations}>
+        <Page>
+          <Card>
+            <Form method="post">
+              <FormLayout>
+                <Text variant="headingMd" as="h2">
+                  Log in
+                </Text>
+                <TextField
+                  type="text"
+                  name="shop"
+                  label="Shop domain"
+                  helpText="example.myshopify.com"
+                  value={shop}
+                  onChange={setShop}
+                  autoComplete="on"
+                  error={errors.shop}
+                />
+                <Button submit>Log in</Button>
+              </FormLayout>
+            </Form>
+          </Card>
+        </Page>
+      </PolarisAppProvider>
+    </ClientOnly>
   );
 }

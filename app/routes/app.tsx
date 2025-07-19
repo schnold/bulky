@@ -7,6 +7,7 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
 import { ensureUserAndSession } from "../utils/session.server";
+import { ClientOnly } from "../components/ClientOnly";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
@@ -33,16 +34,18 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
 
   return (
-    <AppProvider isEmbeddedApp apiKey={apiKey}>
-      <NavMenu>
-        <Link to="/app" rel="home">
-          Home
-        </Link>
-        <Link to="/app/products">SEO Optimizer</Link>
-        <Link to="/app/pricing">Pricing</Link>
-      </NavMenu>
-      <Outlet />
-    </AppProvider>
+    <ClientOnly fallback={<div>Loading...</div>}>
+      <AppProvider isEmbeddedApp apiKey={apiKey}>
+        <NavMenu>
+          <Link to="/app" rel="home">
+            Home
+          </Link>
+          <Link to="/app/products">SEO Optimizer</Link>
+          <Link to="/app/pricing">Pricing</Link>
+        </NavMenu>
+        <Outlet />
+      </AppProvider>
+    </ClientOnly>
   );
 }
 

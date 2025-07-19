@@ -6,13 +6,8 @@ interface ClientOnlyProps {
 }
 
 export function ClientOnly({ children, fallback = null }: ClientOnlyProps) {
-  const [hasMounted, setHasMounted] = useState(false);
-
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  if (!hasMounted) {
+  // Use a simple check for client-side rendering
+  if (typeof window === "undefined") {
     return <>{fallback}</>;
   }
 

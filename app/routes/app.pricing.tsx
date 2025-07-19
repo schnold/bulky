@@ -145,19 +145,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
+  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
   
   const formData = await request.formData();
   const intent = formData.get("intent");
-  const planName = formData.get("plan");
+  const planName = formData.get("plan") as string;
 
   if (intent === "subscribe") {
     try {
+      // Validate plan name and get the correct plan key
+      const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
+      if (!planName || !validPlans.includes(planName)) {
+        return json({ error: "Invalid plan selected" }, { status: 400 });
+      }
+
       await billing.require({
-        plans: [planName as unknown as string],
+        plans: [planName],
         isTest: process.env.NODE_ENV !== "production",
         onFailure: async () => {
           await billing.request({
-            plan: planName as unknown as string,
+            plan: planName,
             isTest: process.env.NODE_ENV !== "production",
             returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
           });

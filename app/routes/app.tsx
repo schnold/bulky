@@ -11,12 +11,22 @@ import { ensureUserAndSession } from "../utils/session.server";
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  try {
+    const { session } = await authenticate.admin(request);
 
-  // Ensure user and session exist for this shop - this will create them if they don't exist
-  await ensureUserAndSession(session.shop);
+    if (!session || !session.shop) {
+      throw new Error("No valid session found");
+    }
 
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+    // Ensure user and session exist for this shop - this will create them if they don't exist
+    await ensureUserAndSession(session.shop);
+
+    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  } catch (error) {
+    console.error("App loader error:", error);
+    // Return a basic response to prevent 500 error
+    return { apiKey: process.env.SHOPIFY_API_KEY || "", error: "Authentication failed" };
+  }
 };
 
 export default function App() {

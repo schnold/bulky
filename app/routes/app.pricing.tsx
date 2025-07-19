@@ -164,7 +164,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         isTest: process.env.NODE_ENV !== "production",
         onFailure: async () => {
           return await billing.request({
-            plan: planName,
+            plan: planName as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN,
             isTest: process.env.NODE_ENV !== "production",
             returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
           });

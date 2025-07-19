@@ -72,5 +72,6 @@ export default defineConfig({
   },
   ssr: {
     noExternal: ["@shopify/polaris", "@shopify/app-bridge-react"],
+    external: ["react", "react-dom"],
   },
 }) satisfies UserConfig;

@@ -1,6 +1,16 @@
 import { createRequestHandler } from "@remix-run/netlify";
 import * as build from "../../build/server/index.js";
 
+// Ensure React is available globally for SSR
+import React from "react";
+import ReactDOM from "react-dom";
+
+// Make React available globally to prevent hooks issues
+if (typeof global !== "undefined") {
+  global.React = React;
+  global.ReactDOM = ReactDOM;
+}
+
 const baseHandler = createRequestHandler({
   build,
   mode: process.env.NODE_ENV || "production",

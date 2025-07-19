@@ -67,6 +67,8 @@ export const handler = async (event, context) => {
     console.log(`- SHOPIFY_API_SECRET: ${process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET'}`);
     console.log(`- SHOPIFY_APP_URL: ${process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET'}`);
     console.log(`- SCOPES: ${process.env.SCOPES ? 'SET' : 'NOT SET'}`);
+    console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'NOT SET'}`);
+    console.log(`- Available env vars:`, Object.keys(process.env).filter(key => key.includes('SHOPIFY') || key.includes('DATABASE')));
     
     if (!databaseUrl) {
       console.error("❌ No database URL found in environment variables");

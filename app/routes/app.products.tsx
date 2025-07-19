@@ -98,7 +98,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     // Validate required environment variables
+    console.log(`🔍 Products loader - Environment variables check:`, {
+      SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
+      SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET',
+      SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET',
+      SCOPES: process.env.SCOPES ? 'SET' : 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+    });
+    
     if (!process.env.SHOPIFY_API_KEY || !process.env.SHOPIFY_API_SECRET) {
+      console.error("❌ Products loader - Missing required Shopify environment variables");
       throw new Error("Missing required Shopify environment variables");
     }
 

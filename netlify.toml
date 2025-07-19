@@ -11,6 +11,7 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
   external_node_modules = ["@shopify/shopify-app-remix", "@prisma/client", "react", "react-dom"]
+  included_files = [".env*"]
 
 [[redirects]]
   from = "/__manifest"

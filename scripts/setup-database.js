@@ -2,7 +2,7 @@
 
 /**
  * Database setup script for Neon PostgreSQL
- * Run this after setting up your Neon database and updating DATABASE_URL
+ * Run this after setting up your Neon database and updating NETLIFY_DATABASE_URL
  */
 
 import { execSync } from 'child_process';
@@ -36,7 +36,7 @@ async function setupDatabase() {
     
     if (error.message.includes('ENOTFOUND') || error.message.includes('connection')) {
       console.log('\n💡 Tips:');
-      console.log('1. Make sure your DATABASE_URL is correct in .env.local');
+      console.log('1. Make sure your NETLIFY_DATABASE_URL is correct in .env.local');
       console.log('2. Check that your Neon database is running');
       console.log('3. Verify your connection string includes ?sslmode=require');
     }

@@ -274,14 +274,14 @@ const PricingCard = ({
                     {price}
                   </Text>
                   {period && (
-                    <Text variant="bodyMd" tone="subdued">
+                    <Text variant="bodyMd" tone="subdued" as="p">
                       {period}
                     </Text>
                   )}
                 </InlineStack>
               </Box>
 
-              <Text variant="bodyMd" tone="subdued">
+              <Text variant="bodyMd" tone="subdued" as="p">
                 {description}
               </Text>
             </BlockStack>

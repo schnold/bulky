@@ -10,18 +10,33 @@ export const handler = async (event, context) => {
   try {
     // Add request logging for debugging
     console.log(`🌐 Request: ${event.httpMethod} ${event.path}`);
-    console.log(`🔍 Headers:`, JSON.stringify(event.headers, null, 2));
     
-    // Ensure NETLIFY_DATABASE_URL is available
-    if (!process.env.NETLIFY_DATABASE_URL) {
-      console.error("❌ NETLIFY_DATABASE_URL environment variable is not set");
+    // Check for database URL (Netlify provides DATABASE_URL automatically)
+    const databaseUrl = process.env.DATABASE_URL || process.env.NETLIFY_DATABASE_URL;
+    
+    console.log(`🔍 Environment check:`);
+    console.log(`- DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
+    console.log(`- NETLIFY_DATABASE_URL: ${process.env.NETLIFY_DATABASE_URL ? 'SET' : 'NOT SET'}`);
+    console.log(`- Using: ${databaseUrl ? 'DATABASE URL FOUND' : 'NO DATABASE URL'}`);
+    
+    if (!databaseUrl) {
+      console.error("❌ No database URL found in environment variables");
+      console.error("Available env vars:", Object.keys(process.env).filter(key => key.includes('DATABASE')));
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "Database configuration error" }),
+        body: JSON.stringify({ 
+          error: "Database configuration error",
+          details: "No DATABASE_URL or NETLIFY_DATABASE_URL found"
+        }),
         headers: {
           "Content-Type": "application/json",
         },
       };
+    }
+    
+    // Set the database URL for Prisma if it's not already set
+    if (!process.env.DATABASE_URL && process.env.NETLIFY_DATABASE_URL) {
+      process.env.DATABASE_URL = process.env.NETLIFY_DATABASE_URL;
     }
     
     // Handle the request
@@ -33,6 +48,7 @@ export const handler = async (event, context) => {
     return response;
   } catch (error) {
     console.error("❌ Server function error:", error);
+    console.error("❌ Error stack:", error.stack);
     
     return {
       statusCode: 500,

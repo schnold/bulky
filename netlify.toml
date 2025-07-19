@@ -3,7 +3,8 @@
   command = "npm install && npx prisma generate && npm run build"
 
 [build.environment]
-  SECRETS_SCAN_OMIT_PATHS = "shopify.app.toml,.env,.env.local,.env.production"
+  SECRETS_SCAN_OMIT_PATHS = "shopify.app.toml,.env,.env.local,.env.production,build/**,README.md,Dockerfile"
+  SECRETS_SCAN_OMIT_KEYS = "NODE_ENV"
   NODE_ENV = "production"
 
 [functions]

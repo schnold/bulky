@@ -230,7 +230,7 @@ const PricingCard = ({
   loading: boolean;
 }) => {
   return (
-    <Card border={true}>
+    <Card>
       <div
         style={{
           background: isPopular

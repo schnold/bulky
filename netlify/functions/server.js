@@ -15,7 +15,16 @@ if (typeof global !== "undefined") {
 if (typeof window === "undefined") {
   global.window = {};
   global.document = {};
-  global.navigator = { userAgent: "node" };
+  
+  // Only set navigator if it doesn't already exist or is not read-only
+  if (typeof global.navigator === "undefined") {
+    try {
+      global.navigator = { userAgent: "node" };
+    } catch (error) {
+      // Navigator might be read-only, skip setting it
+      console.log("Navigator already exists or is read-only, skipping polyfill");
+    }
+  }
 }
 
 const baseHandler = createRequestHandler({

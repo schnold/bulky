@@ -1,3 +1,4 @@
+import "@shopify/shopify-app-remix/adapters/node";
 import { createRequestHandler } from "@remix-run/netlify";
 import * as build from "../../build/server/index.js";
 

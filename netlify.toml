@@ -4,6 +4,7 @@
 
 [build.environment]
   SECRETS_SCAN_OMIT_PATHS = "shopify.app.toml,.env,.env.local,.env.production"
+  NODE_ENV = "production"
 
 [functions]
   directory = "netlify/functions"

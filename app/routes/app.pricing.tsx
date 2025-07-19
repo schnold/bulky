@@ -28,7 +28,7 @@ import { ensureUserExists } from "../utils/db.server";
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
 const STARTER_PLAN = "Starter Plan";
-const PRO_PLAN = "Pro Plan"; 
+const PRO_PLAN = "Pro Plan";
 const ENTERPRISE_PLAN = "Enterprise Plan";
 
 interface PlanFeature {
@@ -115,7 +115,7 @@ interface LoaderData {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
-  
+
   const user = await ensureUserExists(session.shop);
 
   // Check current billing status
@@ -124,12 +124,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isTest: process.env.NODE_ENV !== "production",
   });
 
-  const currentSubscription = billingCheck.appSubscriptions.length > 0 
+  const currentSubscription = billingCheck.appSubscriptions.length > 0
     ? {
-        id: billingCheck.appSubscriptions[0].id,
-        planName: billingCheck.appSubscriptions[0].name,
-        status: "active",
-      }
+      id: billingCheck.appSubscriptions[0].id,
+      planName: billingCheck.appSubscriptions[0].name,
+      status: "active",
+    }
     : null;
 
   return json<LoaderData>({
@@ -146,7 +146,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session, billing } = await authenticate.admin(request);
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
-  
+
   const formData = await request.formData();
   const intent = formData.get("intent");
   const planName = formData.get("plan") as string;
@@ -160,17 +160,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       await billing.require({
-        plans: [planName],
+        plans: [planName] as any,
         isTest: process.env.NODE_ENV !== "production",
         onFailure: async () => {
-          await billing.request({
-            plan: planName,
+          return await billing.request({
+            plan: planName as any,
             isTest: process.env.NODE_ENV !== "production",
             returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
           });
         },
       });
-      
+
       return json({ success: true });
     } catch (error) {
       return json({ error: "Failed to process subscription" }, { status: 400 });
@@ -185,7 +185,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         isTest: process.env.NODE_ENV !== "production",
         prorate: true,
       });
-      
+
       return json({ success: true, message: "Subscription cancelled successfully" });
     } catch (error) {
       return json({ error: "Failed to cancel subscription" }, { status: 400 });
@@ -202,19 +202,19 @@ const FeatureIcon = ({ included }: { included: boolean | string }) => {
   return <Icon source={CheckIcon} tone="success" />;
 };
 
-const PricingCard = ({ 
-  title, 
-  price, 
-  period, 
-  description, 
-  features, 
-  buttonText, 
-  buttonVariant, 
+const PricingCard = ({
+  title,
+  price,
+  period,
+  description,
+  features,
+  buttonText,
+  buttonVariant,
   isPopular,
   isFree,
   isCurrentPlan,
   onSubscribe,
-  loading 
+  loading
 }: {
   title: string;
   price: string;
@@ -231,15 +231,15 @@ const PricingCard = ({
 }) => {
   return (
     <Card border={true}>
-      <Box 
-        padding="600" 
+      <Box
+        padding="600"
         minHeight="100%"
         style={{
-          background: isPopular 
-            ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' 
-            : isFree 
-            ? 'linear-gradient(135deg, #fefefe 0%, #f9fafb 100%)'
-            : undefined,
+          background: isPopular
+            ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+            : isFree
+              ? 'linear-gradient(135deg, #fefefe 0%, #f9fafb 100%)'
+              : undefined,
           borderRadius: '12px',
           position: 'relative' as const,
         }}
@@ -263,11 +263,11 @@ const PricingCard = ({
                   </Badge>
                 )}
               </InlineStack>
-              
+
               <Box>
                 <InlineStack gap="100" blockAlign="end">
-                  <Text 
-                    variant="heading2xl" 
+                  <Text
+                    variant="heading2xl"
                     as="p"
                     tone={isPopular ? "magic" : isFree ? "success" : undefined}
                   >
@@ -280,7 +280,7 @@ const PricingCard = ({
                   )}
                 </InlineStack>
               </Box>
-              
+
               <Text variant="bodyMd" tone="subdued">
                 {description}
               </Text>
@@ -407,19 +407,19 @@ export default function Pricing() {
     const form = document.createElement("form");
     form.method = "POST";
     form.style.display = "none";
-    
+
     const intentInput = document.createElement("input");
     intentInput.type = "hidden";
     intentInput.name = "intent";
     intentInput.value = "subscribe";
     form.appendChild(intentInput);
-    
+
     const planInput = document.createElement("input");
     planInput.type = "hidden";
     planInput.name = "plan";
     planInput.value = planName;
     form.appendChild(planInput);
-    
+
     document.body.appendChild(form);
     form.submit();
   };
@@ -429,19 +429,19 @@ export default function Pricing() {
       const form = document.createElement("form");
       form.method = "POST";
       form.style.display = "none";
-      
+
       const intentInput = document.createElement("input");
       intentInput.type = "hidden";
       intentInput.name = "intent";
       intentInput.value = "cancel";
       form.appendChild(intentInput);
-      
+
       const subscriptionInput = document.createElement("input");
       subscriptionInput.type = "hidden";
       subscriptionInput.name = "subscriptionId";
       subscriptionInput.value = currentSubscription.id;
       form.appendChild(subscriptionInput);
-      
+
       document.body.appendChild(form);
       form.submit();
     }
@@ -458,9 +458,9 @@ export default function Pricing() {
     <Frame>
       <Page>
         <TitleBar title="Pricing & Plans" />
-        
+
         {/* Header Section */}
-        <Box 
+        <Box
           style={{
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             borderRadius: '16px',
@@ -477,7 +477,7 @@ export default function Pricing() {
                 <br />
                 Start free and scale as you grow.
               </Text>
-              
+
               {currentSubscription && (
                 <Box paddingBlockStart="400">
                   <Banner
@@ -531,7 +531,7 @@ export default function Pricing() {
                 loading={isLoading}
               />
             </Grid.Cell>
-            
+
             <Grid.Cell>
               <PricingCard
                 title="Pro"
@@ -547,7 +547,7 @@ export default function Pricing() {
                 loading={isLoading}
               />
             </Grid.Cell>
-            
+
             <Grid.Cell>
               <PricingCard
                 title="Enterprise"
@@ -573,7 +573,7 @@ export default function Pricing() {
                 <Text variant="heading2xl" as="h2" alignment="center">
                   Frequently Asked Questions
                 </Text>
-                
+
                 <BlockStack gap="400">
                   {faqData.map((faq, index) => (
                     <FAQItem

@@ -61,6 +61,7 @@ export default defineConfig({
         v3_singleFetch: false,
         v3_routeConfig: true,
       },
+      serverBuildFile: "index.js",
     }),
     tsconfigPaths(),
   ],

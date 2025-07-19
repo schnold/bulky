@@ -13,6 +13,11 @@
   external_node_modules = ["@shopify/shopify-app-remix", "@prisma/client", "react", "react-dom"]
 
 [[redirects]]
+  from = "/__manifest"
+  to = "/.netlify/functions/server"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/.netlify/functions/server"
   status = 200

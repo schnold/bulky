@@ -1,8 +1,11 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  try {
-    const url = new URL(request.url);
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  
+  // Handle __manifest requests
+  if (pathname === "/__manifest") {
     const searchParams = url.searchParams;
     
     // Get all the 'p' parameters (pages) from the query string
@@ -33,16 +36,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         "Access-Control-Allow-Headers": "Content-Type",
       },
     });
-  } catch (error) {
-    console.error("Manifest error:", error);
-    return Response.json(
-      { error: "Failed to generate manifest" },
-      { 
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
   }
+  
+  // For other routes, throw a 404
+  throw new Response("Not Found", { status: 404 });
 }

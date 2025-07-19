@@ -11,6 +11,13 @@ if (typeof global !== "undefined") {
   global.ReactDOM = ReactDOM;
 }
 
+// Polyfill for server environment
+if (typeof window === "undefined") {
+  global.window = {};
+  global.document = {};
+  global.navigator = { userAgent: "node" };
+}
+
 const baseHandler = createRequestHandler({
   build,
   mode: process.env.NODE_ENV || "production",

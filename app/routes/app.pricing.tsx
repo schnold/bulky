@@ -160,7 +160,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       await billing.require({
-        plans: [planName],
+        plans: [planName as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN],
         isTest: process.env.NODE_ENV !== "production",
         onFailure: async () => {
           return await billing.request({

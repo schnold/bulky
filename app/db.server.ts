@@ -1,15 +1,25 @@
 import { PrismaClient } from "@prisma/client";
 
 declare global {
-  var prismaGlobal: PrismaClient;
+  var prismaGlobal: PrismaClient | undefined;
 }
 
-if (process.env.NODE_ENV !== "production") {
+// Create a single instance for serverless environments
+let prisma: PrismaClient;
+
+if (process.env.NODE_ENV === "production") {
+  // In production (Netlify), create a new instance each time
+  prisma = new PrismaClient({
+    log: ['error'],
+  });
+} else {
+  // In development, use global to avoid multiple instances
   if (!global.prismaGlobal) {
-    global.prismaGlobal = new PrismaClient();
+    global.prismaGlobal = new PrismaClient({
+      log: ['query', 'info', 'warn', 'error'],
+    });
   }
+  prisma = global.prismaGlobal;
 }
-
-const prisma = global.prismaGlobal ?? new PrismaClient();
 
 export default prisma;

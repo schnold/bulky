@@ -27,17 +27,17 @@ const shopify = shopifyApp({
     [STARTER_PLAN]: {
       amount: 9.99,
       currencyCode: "USD",
-      interval: BillingInterval.OneTime,
+      interval: BillingInterval.Every30Days,
     },
     [PRO_PLAN]: {
       amount: 29.99,
       currencyCode: "USD",
-      interval: BillingInterval.OneTime,
+      interval: BillingInterval.Every30Days,
     },
     [ENTERPRISE_PLAN]: {
       amount: 59.99,
       currencyCode: "USD",
-      interval: BillingInterval.OneTime,
+      interval: BillingInterval.Every30Days,
     },
   },
   webhooks: {

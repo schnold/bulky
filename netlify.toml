@@ -8,6 +8,8 @@
 
 [functions]
   directory = "netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["@shopify/shopify-app-remix"]
 
 [[redirects]]
   from = "/*"

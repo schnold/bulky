@@ -120,7 +120,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Check current billing status
   const billingCheck = await billing.check({
-    plans: [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN] as any,
+    plans: [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN],
     isTest: process.env.NODE_ENV !== "production",
   });
 
@@ -160,11 +160,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       await billing.require({
-        plans: [planName] as any,
+        plans: [planName],
         isTest: process.env.NODE_ENV !== "production",
         onFailure: async () => {
           return await billing.request({
-            plan: planName as any,
+            plan: planName,
             isTest: process.env.NODE_ENV !== "production",
             returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
           });

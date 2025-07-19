@@ -3,7 +3,7 @@
 client_id = "${SHOPIFY_API_KEY}"
 name = "b1: Bulk Product SEO Optimizer"
 handle = "b1-bulk-product-seo-optimizer"
-application_url = "${SHOPIFY_APP_URL}"
+application_url = "https://b1-bulk-product-seo-enhancer.netlify.app"
 # For local development, you'll need to use ngrok or update this to your local tunnel URL
 embedded = true
 
@@ -29,7 +29,7 @@ api_version = "2025-07"
 scopes = "write_products"
 
 [auth]
-redirect_urls = ["${SHOPIFY_APP_URL}/auth/callback", "${SHOPIFY_APP_URL}/auth/shopify/callback", "${SHOPIFY_APP_URL}/api/auth/callback"]
+redirect_urls = ["https://b1-bulk-product-seo-enhancer.netlify.app/auth/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/auth/shopify/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/api/auth/callback"]
 
 [pos]
 embedded = false

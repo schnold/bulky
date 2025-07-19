@@ -63,6 +63,10 @@ export const handler = async (event, context) => {
     console.log(`- DATABASE_URL: ${process.env.DATABASE_URL ? 'SET' : 'NOT SET'}`);
     console.log(`- NETLIFY_DATABASE_URL: ${process.env.NETLIFY_DATABASE_URL ? 'SET' : 'NOT SET'}`);
     console.log(`- Using: ${databaseUrl ? 'DATABASE URL FOUND' : 'NO DATABASE URL'}`);
+    console.log(`- SHOPIFY_API_KEY: ${process.env.SHOPIFY_API_KEY ? 'SET' : 'NOT SET'}`);
+    console.log(`- SHOPIFY_API_SECRET: ${process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET'}`);
+    console.log(`- SHOPIFY_APP_URL: ${process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET'}`);
+    console.log(`- SCOPES: ${process.env.SCOPES ? 'SET' : 'NOT SET'}`);
     
     if (!databaseUrl) {
       console.error("❌ No database URL found in environment variables");

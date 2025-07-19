@@ -83,102 +83,146 @@ interface OptimizationContext {
 
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  try {
+    console.log(`🔍 Products loader - Request URL: ${request.url}`);
+    console.log(`🔍 Products loader - Environment check:`, {
+      NODE_ENV: process.env.NODE_ENV,
+      SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
+      SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET',
+      SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET',
+    });
 
-  // Get user data from database (user is guaranteed to exist from app.tsx loader)
-  const { ensureUserExists } = await import("../utils/db.server");
-  const user = await ensureUserExists(session.shop);
-
-  // Get subscription data
-  const subscription = user?.subscriptions?.[0] || null;
-
-  const url = new URL(request.url);
-  const query = url.searchParams.get("query") || "";
-  const status = url.searchParams.get("status") || "";
-  const productType = url.searchParams.get("productType") || "";
-  const vendor = url.searchParams.get("vendor") || "";
-  const cursor = url.searchParams.get("cursor") || "";
-  const direction = url.searchParams.get("direction") || "next";
-  const page = parseInt(url.searchParams.get("page") || "1", 10);
-
-  // Build GraphQL query filters
-  let queryString = "";
-  const filters = [];
-
-  if (query) filters.push(`title:*${query}*`);
-  if (status && status !== "any") filters.push(`status:${status}`);
-  if (productType) filters.push(`product_type:${productType}`);
-  if (vendor) filters.push(`vendor:${vendor}`);
-
-  if (filters.length > 0) {
-    queryString = filters.join(" AND ");
-  }
-
-  // Pagination parameters
-  const first = direction === "next" ? 15 : undefined;
-  const last = direction === "previous" ? 15 : undefined;
-  const after = direction === "next" && cursor ? cursor : undefined;
-  const before = direction === "previous" && cursor ? cursor : undefined;
-
-  const response = await admin.graphql(
-    `#graphql
-      query getProducts($first: Int, $last: Int, $after: String, $before: String, $query: String) {
-        products(first: $first, last: $last, after: $after, before: $before, query: $query) {
-          edges {
-            node {
-              id
-              title
-              descriptionHtml
-              handle
-              status
-              productType
-              vendor
-              tags
-              createdAt
-              featuredImage {
-                url
-                altText
-              }
-            }
-            cursor
-          }
-          pageInfo {
-            hasNextPage
-            hasPreviousPage
-            startCursor
-            endCursor
-          }
-        }
-      }`,
-    {
-      variables: {
-        first,
-        last,
-        after,
-        before,
-        query: queryString,
-      },
+    // Validate that we're in a server environment
+    if (typeof window !== "undefined") {
+      throw new Error("Products loader should not be called in browser context");
     }
-  );
 
-  const responseJson = await response.json();
-  const data = responseJson.data?.products;
+    // Validate required environment variables
+    if (!process.env.SHOPIFY_API_KEY || !process.env.SHOPIFY_API_SECRET) {
+      throw new Error("Missing required Shopify environment variables");
+    }
 
-  const products: Product[] = data?.edges?.map((edge: any) => edge.node) || [];
+    const { admin, session } = await authenticate.admin(request);
 
-  return json<LoaderData>({
-    products,
-    pageInfo: data?.pageInfo || { hasNextPage: false, hasPreviousPage: false, startCursor: undefined, endCursor: undefined },
-    totalCount: products.length,
-    currentPage: page,
-    productsPerPage: 15,
-    user: {
-      id: user.id,
-      plan: user.plan,
-      credits: user.credits,
-    },
-    subscription: subscription,
-  });
+    if (!session || !session.shop) {
+      throw new Error("No valid session found");
+    }
+
+    console.log(`✅ Products loader - Authentication successful for shop: ${session.shop}`);
+
+    // Get user data from database (user is guaranteed to exist from app.tsx loader)
+    const { ensureUserExists } = await import("../utils/db.server");
+    const user = await ensureUserExists(session.shop);
+
+    console.log(`✅ Products loader - User found:`, { id: user.id, shop: user.shop, plan: user.plan });
+
+    // Get subscription data
+    const subscription = user?.subscriptions?.[0] || null;
+
+    const url = new URL(request.url);
+    const query = url.searchParams.get("query") || "";
+    const status = url.searchParams.get("status") || "";
+    const productType = url.searchParams.get("productType") || "";
+    const vendor = url.searchParams.get("vendor") || "";
+    const cursor = url.searchParams.get("cursor") || "";
+    const direction = url.searchParams.get("direction") || "next";
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+
+    // Build GraphQL query filters
+    let queryString = "";
+    const filters = [];
+
+    if (query) filters.push(`title:*${query}*`);
+    if (status && status !== "any") filters.push(`status:${status}`);
+    if (productType) filters.push(`product_type:${productType}`);
+    if (vendor) filters.push(`vendor:${vendor}`);
+
+    if (filters.length > 0) {
+      queryString = filters.join(" AND ");
+    }
+
+    // Pagination parameters
+    const first = direction === "next" ? 15 : undefined;
+    const last = direction === "previous" ? 15 : undefined;
+    const after = direction === "next" && cursor ? cursor : undefined;
+    const before = direction === "previous" && cursor ? cursor : undefined;
+
+    console.log(`🔍 Products loader - Making GraphQL query with filters:`, { queryString, first, last, after, before });
+
+    const response = await admin.graphql(
+      `#graphql
+        query getProducts($first: Int, $last: Int, $after: String, $before: String, $query: String) {
+          products(first: $first, last: $last, after: $after, before: $before, query: $query) {
+            edges {
+              node {
+                id
+                title
+                descriptionHtml
+                handle
+                status
+                productType
+                vendor
+                tags
+                createdAt
+                featuredImage {
+                  url
+                  altText
+                }
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+              startCursor
+              endCursor
+            }
+          }
+        }`,
+      {
+        variables: {
+          first,
+          last,
+          after,
+          before,
+          query: queryString,
+        },
+      }
+    );
+
+    const responseJson = await response.json();
+    const data = responseJson.data?.products;
+
+    const products: Product[] = data?.edges?.map((edge: any) => edge.node) || [];
+
+    console.log(`✅ Products loader - Retrieved ${products.length} products`);
+
+    return json<LoaderData>({
+      products,
+      pageInfo: data?.pageInfo || { hasNextPage: false, hasPreviousPage: false, startCursor: undefined, endCursor: undefined },
+      totalCount: products.length,
+      currentPage: page,
+      productsPerPage: 15,
+      user: {
+        id: user.id,
+        plan: user.plan,
+        credits: user.credits,
+      },
+      subscription: subscription,
+    });
+  } catch (error) {
+    console.error("❌ Products loader error:", error);
+    console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    
+    // Return a proper error response instead of throwing
+    return json(
+      { 
+        error: "Failed to load products",
+        details: error instanceof Error ? error.message : "Unknown error"
+      },
+      { status: 500 }
+    );
+  }
 };
 
 // Sparkle Button Component
@@ -207,7 +251,28 @@ function SparkleButton({
 }
 
 export default function Products() {
-  const { products, pageInfo, currentPage, productsPerPage, user, subscription } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  
+  // Check if there was an error in the loader
+  if ('error' in loaderData) {
+    return (
+      <Page>
+        <TitleBar title="Products" />
+        <Card>
+          <Box padding="600">
+            <Text variant="headingMd" as="h2" tone="critical">
+              Error Loading Products
+            </Text>
+            <Text variant="bodyMd" tone="subdued" as="p">
+              {loaderData.details}
+            </Text>
+          </Box>
+        </Card>
+      </Page>
+    );
+  }
+  
+  const { products, pageInfo, currentPage, productsPerPage, user, subscription } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
   const optimizeFetcher = useFetcher();
 

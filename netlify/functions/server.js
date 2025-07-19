@@ -17,9 +17,11 @@ if (typeof window === "undefined") {
   global.document = {};
   
   // Add matchMedia polyfill for Polaris components
-  global.window.matchMedia = global.window.matchMedia || function() {
+  global.window.matchMedia = global.window.matchMedia || function(query) {
     return {
       matches: false,
+      media: query,
+      onchange: null,
       addListener: function() {},
       removeListener: function() {},
       addEventListener: function() {},
@@ -27,6 +29,11 @@ if (typeof window === "undefined") {
       dispatchEvent: function() { return false; }
     };
   };
+  
+  // Add other necessary browser APIs
+  global.window.addEventListener = global.window.addEventListener || function() {};
+  global.window.removeEventListener = global.window.removeEventListener || function() {};
+  global.window.dispatchEvent = global.window.dispatchEvent || function() { return false; };
   
   // Only set navigator if it doesn't already exist or is not read-only
   if (typeof global.navigator === "undefined") {

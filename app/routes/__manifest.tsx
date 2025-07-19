@@ -12,6 +12,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Build the full redirect URL using the application URL from config
     const baseUrl = process.env.SHOPIFY_APP_URL || "https://b1-bulk-product-seo-enhancer.netlify.app";
     
+    console.log(`📋 Manifest request:`, { pages, version, baseUrl });
+    
     // Create the manifest response that Shopify expects for app authentication
     const manifest = {
       name: "b1: Bulk Product SEO Optimizer",
@@ -22,6 +24,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       embedded: true,
       timestamp: new Date().toISOString(),
     };
+    
+    console.log(`✅ Generated manifest:`, manifest);
     
     return Response.json(manifest, {
       status: 200,
@@ -34,9 +38,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     });
   } catch (error) {
-    console.error("Manifest error:", error);
+    console.error("❌ Manifest error:", error);
+    console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    
+    // Return a more detailed error response for debugging
     return Response.json(
-      { error: "Failed to generate manifest" },
+      { 
+        error: "Failed to generate manifest",
+        details: error instanceof Error ? error.message : "Unknown error",
+        stack: process.env.NODE_ENV === "development" && error instanceof Error ? error.stack : undefined
+      },
       { 
         status: 500,
         headers: {

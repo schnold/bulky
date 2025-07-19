@@ -150,7 +150,7 @@ export default function Dashboard() {
                       <Text variant="heading2xl" as="p">
                         {user.credits}
                       </Text>
-                      <Text variant="bodyMd" tone="subdued">
+                      <Text variant="bodyMd" tone="subdued" as="p">
                         Credits Remaining
                       </Text>
                     </BlockStack>
@@ -163,7 +163,7 @@ export default function Dashboard() {
                       <Badge tone={isFreePlan ? "warning" : "success"}>
                         {planName}
                       </Badge>
-                      <Text variant="bodyMd" tone="subdued">
+                      <Text variant="bodyMd" tone="subdued" as="p">
                         Current Plan
                       </Text>
                     </BlockStack>
@@ -176,7 +176,7 @@ export default function Dashboard() {
                       <Text variant="heading2xl" as="p">
                         {user.shop}
                       </Text>
-                      <Text variant="bodyMd" tone="subdued">
+                      <Text variant="bodyMd" tone="subdued" as="p">
                         Shop Domain
                       </Text>
                     </BlockStack>
@@ -195,7 +195,7 @@ export default function Dashboard() {
                 <Text variant="headingMd" as="h2">
                   Getting Started
                 </Text>
-                <Text variant="bodyMd" tone="subdued">
+                <Text variant="bodyMd" tone="subdued" as="p">
                   Follow these steps to optimize your first products:
                 </Text>
                 
@@ -204,7 +204,7 @@ export default function Dashboard() {
                     <Box>
                       <Badge tone="info">1</Badge>
                     </Box>
-                    <Text variant="bodyMd">
+                    <Text variant="bodyMd" as="p">
                       Go to the Products page and select products to optimize
                     </Text>
                   </InlineStack>
@@ -213,7 +213,7 @@ export default function Dashboard() {
                     <Box>
                       <Badge tone="info">2</Badge>
                     </Box>
-                    <Text variant="bodyMd">
+                    <Text variant="bodyMd" as="p">
                       Choose between Quick Optimize or Advanced Optimize with custom context
                     </Text>
                   </InlineStack>
@@ -222,7 +222,7 @@ export default function Dashboard() {
                     <Box>
                       <Badge tone="info">3</Badge>
                     </Box>
-                    <Text variant="bodyMd">
+                    <Text variant="bodyMd" as="p">
                       Review your optimized products and watch your SEO improve
                     </Text>
                   </InlineStack>
@@ -244,11 +244,11 @@ export default function Dashboard() {
                 <Grid.Cell>
                   <BlockStack gap="300">
                     <InlineStack gap="200" align="start">
-                      <Text variant="bodyMd" fontWeight="semibold">
+                      <Text variant="bodyMd" fontWeight="semibold" as="p">
                         ✨ AI-Powered Optimization
                       </Text>
                     </InlineStack>
-                    <Text variant="bodyMd" tone="subdued">
+                    <Text variant="bodyMd" tone="subdued" as="p">
                       Advanced AI algorithms optimize your product titles, descriptions, and metadata for better search rankings.
                     </Text>
                   </BlockStack>
@@ -257,11 +257,11 @@ export default function Dashboard() {
                 <Grid.Cell>
                   <BlockStack gap="300">
                     <InlineStack gap="200" align="start">
-                      <Text variant="bodyMd" fontWeight="semibold">
+                      <Text variant="bodyMd" fontWeight="semibold" as="p">
                         📊 Performance Analytics
                       </Text>
                     </InlineStack>
-                    <Text variant="bodyMd" tone="subdued">
+                    <Text variant="bodyMd" tone="subdued" as="p">
                       Track your SEO improvements with detailed analytics and performance metrics.
                     </Text>
                   </BlockStack>
@@ -270,11 +270,11 @@ export default function Dashboard() {
                 <Grid.Cell>
                   <BlockStack gap="300">
                     <InlineStack gap="200" align="start">
-                      <Text variant="bodyMd" fontWeight="semibold">
+                      <Text variant="bodyMd" fontWeight="semibold" as="p">
                         🚀 Bulk Processing
                       </Text>
                     </InlineStack>
-                    <Text variant="bodyMd" tone="subdued">
+                    <Text variant="bodyMd" tone="subdued" as="p">
                       Optimize multiple products at once to save time and improve efficiency.
                     </Text>
                   </BlockStack>
@@ -283,11 +283,11 @@ export default function Dashboard() {
                 <Grid.Cell>
                   <BlockStack gap="300">
                     <InlineStack gap="200" align="start">
-                      <Text variant="bodyMd" fontWeight="semibold">
+                      <Text variant="bodyMd" fontWeight="semibold" as="p">
                         🎯 Custom Context
                       </Text>
                     </InlineStack>
-                    <Text variant="bodyMd" tone="subdued">
+                    <Text variant="bodyMd" tone="subdued" as="p">
                       Provide custom context for more accurate and relevant optimizations.
                     </Text>
                   </BlockStack>

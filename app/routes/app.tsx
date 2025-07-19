@@ -7,24 +7,31 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
 import { ensureUserAndSession } from "../utils/session.server";
-import { ClientOnly } from "../components/ClientOnly";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
+    console.log(`🔍 App loader - Request URL: ${request.url}`);
+    
     const { session } = await authenticate.admin(request);
 
     if (!session || !session.shop) {
+      console.error("❌ App loader - No valid session found");
       throw new Error("No valid session found");
     }
+
+    console.log(`✅ App loader - Session found for shop: ${session.shop}`);
 
     // Ensure user and session exist for this shop - this will create them if they don't exist
     await ensureUserAndSession(session.shop);
 
-    return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+    const apiKey = process.env.SHOPIFY_API_KEY || "";
+    console.log(`✅ App loader - Returning API key: ${apiKey ? 'SET' : 'NOT SET'}`);
+
+    return { apiKey };
   } catch (error) {
-    console.error("App loader error:", error);
+    console.error("❌ App loader error:", error);
     // Return a basic response to prevent 500 error
     return { apiKey: process.env.SHOPIFY_API_KEY || "", error: "Authentication failed" };
   }
@@ -33,25 +40,27 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
 
+  console.log(`🎨 App component rendering with API key: ${apiKey ? 'SET' : 'NOT SET'}`);
+
   return (
-    <ClientOnly fallback={<div>Loading...</div>}>
-      <AppProvider isEmbeddedApp apiKey={apiKey}>
-        <NavMenu>
-          <Link to="/app" rel="home">
-            Home
-          </Link>
-          <Link to="/app/products">SEO Optimizer</Link>
-          <Link to="/app/pricing">Pricing</Link>
-        </NavMenu>
-        <Outlet />
-      </AppProvider>
-    </ClientOnly>
+    <AppProvider isEmbeddedApp apiKey={apiKey}>
+      <NavMenu>
+        <Link to="/app" rel="home">
+          Home
+        </Link>
+        <Link to="/app/products">SEO Optimizer</Link>
+        <Link to="/app/pricing">Pricing</Link>
+      </NavMenu>
+      <Outlet />
+    </AppProvider>
   );
 }
 
 // Shopify needs Remix to catch some thrown responses, so that their headers are included in the response.
 export function ErrorBoundary() {
-  return boundary.error(useRouteError());
+  const error = useRouteError();
+  console.error("❌ App ErrorBoundary caught error:", error);
+  return boundary.error(error);
 }
 
 export const headers: HeadersFunction = (headersArgs) => {

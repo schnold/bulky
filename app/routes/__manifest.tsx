@@ -1,3 +1,4 @@
+import { json } from "@remix-run/node";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -27,7 +28,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     
     console.log(`✅ Generated manifest:`, manifest);
     
-    return Response.json(manifest, {
+    return json(manifest, {
       status: 200,
       headers: {
         "Content-Type": "application/json",
@@ -42,7 +43,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
     
     // Return a more detailed error response for debugging
-    return Response.json(
+    return json(
       { 
         error: "Failed to generate manifest",
         details: error instanceof Error ? error.message : "Unknown error",

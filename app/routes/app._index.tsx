@@ -34,9 +34,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw new Response("Unauthorized", { status: 401 });
   }
 
+  console.log(`🔍 LOADER - Session shop: ${session.shop}`);
+
   // Get user data from database (user is guaranteed to exist from app.tsx loader)
-  const { ensureUserExists } = await import("../utils/db.server");
-  const user = await ensureUserExists(session.shop, true); // Include keywords
+  const { ensureUserAndSession } = await import("../utils/session.server");
+  const user = await ensureUserAndSession(session.shop, true); // Include keywords
+
+  console.log(`🔍 LOADER - User found:`, { 
+    id: user.id, 
+    shop: user.shop, 
+    keywordsCount: user.keywords?.length || 0,
+    keywords: user.keywords?.map(k => k.keyword) || []
+  });
 
   return json({ user });
 };
@@ -52,12 +61,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const formData = await request.formData();
     const intent = formData.get("intent");
 
-    const user = await prisma.user.findUnique({
-      where: { shop: session.shop }
-    });
+    // Ensure user exists before any operations
+    const { ensureUserAndSession } = await import("../utils/session.server");
+    const user = await ensureUserAndSession(session.shop);
 
     if (!user) {
-      return json({ error: "User not found" }, { status: 404 });
+      return json({ error: "Failed to create or find user" }, { status: 500 });
     }
 
     if (intent === "addKeyword") {
@@ -68,14 +77,36 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       try {
-        await prisma.keyword.create({
+        console.log(`🏷️ Adding keyword "${keyword.trim()}" for user ${user.id} (shop: ${session.shop})`);
+        console.log(`🔍 User details:`, { id: user.id, shop: user.shop, plan: user.plan });
+        
+        const newKeyword = await prisma.keyword.create({
           data: {
             keyword: keyword.trim(),
             userId: user.id,
           }
         });
+        
+        console.log(`✅ Successfully created keyword with ID: ${newKeyword.id}`);
+        
+        // Verify the keyword was actually created
+        const verifyKeyword = await prisma.keyword.findUnique({
+          where: { id: newKeyword.id },
+          include: { user: true }
+        });
+        console.log(`🔍 Verification - keyword exists:`, verifyKeyword ? 'YES' : 'NO');
+        if (verifyKeyword) {
+          console.log(`🔍 Keyword details:`, { 
+            id: verifyKeyword.id, 
+            keyword: verifyKeyword.keyword, 
+            userId: verifyKeyword.userId,
+            userShop: verifyKeyword.user.shop 
+          });
+        }
+        
         return json({ success: true, message: "Keyword added successfully" });
       } catch (error) {
+        console.error(`❌ Failed to create keyword:`, error);
         return json({ error: "Keyword already exists" }, { status: 400 });
       }
     }

@@ -1,9 +1,10 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "fa9d90437a467b7215e296d9eb003d7d"
+client_id = "${SHOPIFY_API_KEY}"
 name = "b1: Bulk Product SEO Optimizer"
 handle = "b1-bulk-product-seo-optimizer"
-application_url = "https://bulky-hs0c.onrender.com"
+application_url = "${SHOPIFY_APP_URL}"
+# For local development, you'll need to use ngrok or update this to your local tunnel URL
 embedded = true
 
 [build]
@@ -28,7 +29,7 @@ api_version = "2025-07"
 scopes = "write_products"
 
 [auth]
-redirect_urls = ["https://bulky-hs0c.onrender.com/auth/callback", "https://bulky-hs0c.onrender.com/auth/shopify/callback", "https://bulky-hs0c.onrender.com/api/auth/callback"]
+redirect_urls = ["${SHOPIFY_APP_URL}/auth/callback", "${SHOPIFY_APP_URL}/auth/shopify/callback", "${SHOPIFY_APP_URL}/api/auth/callback"]
 
 [pos]
 embedded = false

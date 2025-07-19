@@ -1,6 +1,6 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "${SHOPIFY_API_KEY}"
+client_id = "fa9d90437a467b7215e296d9eb003d7d"
 name = "b1: Bulk Product SEO Optimizer"
 handle = "b1-bulk-product-seo-optimizer"
 application_url = "https://b1-bulk-product-seo-enhancer.netlify.app"

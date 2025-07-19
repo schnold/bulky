@@ -5,11 +5,15 @@
 [build.environment]
   SECRETS_SCAN_OMIT_PATHS = "shopify.app.toml,.env,.env.local,.env.production"
   NODE_ENV = "production"
+  PRISMA_GENERATE_SKIP_AUTOINSTALL = "true"
 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  external_node_modules = ["@shopify/shopify-app-remix"]
+  external_node_modules = ["@shopify/shopify-app-remix", "@prisma/client"]
+
+[[plugins]]
+  package = "./.netlify/plugins/prisma-generate.js"
 
 [[redirects]]
   from = "/*"

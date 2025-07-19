@@ -24,19 +24,19 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   billing: {
     [STARTER_PLAN]: {
-      amount: 29.99,
+      amount: 9.99,
       currencyCode: "USD",
-      interval: BillingInterval.Every30Days,
+      interval: BillingInterval.OneTime,
     },
     [PRO_PLAN]: {
-      amount: 99.99,
+      amount: 29.99,
       currencyCode: "USD",
-      interval: BillingInterval.Every30Days,
+      interval: BillingInterval.OneTime,
     },
     [ENTERPRISE_PLAN]: {
-      amount: 299.99,
+      amount: 59.99,
       currencyCode: "USD",
-      interval: BillingInterval.Every30Days,
+      interval: BillingInterval.OneTime,
     },
   },
   webhooks: {

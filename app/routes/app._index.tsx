@@ -42,9 +42,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { ensureUserAndSession } = await import("../utils/session.server");
   const user = await ensureUserAndSession(session.shop, true); // Include keywords
 
-  console.log(`🔍 LOADER - User found:`, { 
-    id: user.id, 
-    shop: user.shop, 
+  console.log(`🔍 LOADER - User found:`, {
+    id: user.id,
+    shop: user.shop,
     keywordsCount: user.keywords?.length || 0,
     keywords: user.keywords?.map(k => k.keyword) || []
   });
@@ -82,16 +82,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       try {
         console.log(`🏷️ Adding keyword "${keyword.trim()}" for user ${user.id} (shop: ${session.shop})`);
         console.log(`🔍 User details:`, { id: user.id, shop: user.shop, plan: user.plan });
-        
+
         const newKeyword = await prisma.keyword.create({
           data: {
             keyword: keyword.trim(),
             userId: user.id,
           }
         });
-        
+
         console.log(`✅ Successfully created keyword with ID: ${newKeyword.id}`);
-        
+
         // Verify the keyword was actually created
         const verifyKeyword = await prisma.keyword.findUnique({
           where: { id: newKeyword.id },
@@ -99,14 +99,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
         console.log(`🔍 Verification - keyword exists:`, verifyKeyword ? 'YES' : 'NO');
         if (verifyKeyword) {
-          console.log(`🔍 Keyword details:`, { 
-            id: verifyKeyword.id, 
-            keyword: verifyKeyword.keyword, 
+          console.log(`🔍 Keyword details:`, {
+            id: verifyKeyword.id,
+            keyword: verifyKeyword.keyword,
             userId: verifyKeyword.userId,
-            userShop: verifyKeyword.user.shop 
+            userShop: verifyKeyword.user.shop
           });
         }
-        
+
         return json({ success: true, message: "Keyword added successfully" });
       } catch (error) {
         console.error(`❌ Failed to create keyword:`, error);
@@ -205,209 +205,197 @@ export default function Index() {
   return (
     <Page>
       <TitleBar title="AI Product Optimizer Dashboard" />
-      <ClientOnly fallback={<div>Loading dashboard...</div>}>
-        <BlockStack gap="500">
-          <Layout>
-            <Layout.Section>
-              {/* Welcome Card */}
-              <Card>
-                <BlockStack gap="500">
-                  <BlockStack gap="200">
-                    <Text as="h2" variant="headingMd">
-                      Welcome to b1 your Bulk AI Product Optimizer 💫
-                    </Text>
-                    <Text variant="bodyMd" as="p">
-                      Optimize your Shopify products with AI-powered SEO using 2025 best practices.
-                      Get started by managing your optimization settings below.
-                    </Text>
-                  </BlockStack>
+      <BlockStack gap="500">
+        <Layout>
+          <Layout.Section>
+            {/* Welcome Card */}
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">
+                  Welcome to your Bulk AI Product Optimizer 💫
+                </Text>
+                <Text variant="bodyMd" as="p">
+                  Optimize your Shopify products with AI-powered SEO using 2025 best practices.
+                </Text>
+                <Button url="/app/products" variant="primary">
+                  Optimize Products
+                </Button>
+              </BlockStack>
+            </Card>
 
-                  <InlineStack gap="300">
-                    <Button
-                      url="/app/products"
-                      variant="primary"
-                    >
-                      Optimize Products
-                    </Button>
-
-                  </InlineStack>
-                </BlockStack>
-              </Card>
-
-              {/* Keywords Management Card */}
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h2" variant="headingMd">
-                      SEO Keywords
-                    </Text>
-                    {(!user.keywords || user.keywords.length < 3) && (
-                      <Badge tone="attention">
-                        Add 3+ keywords for better results
-                      </Badge>
-                    )}
-                  </InlineStack>
-
-                  <Text variant="bodySm" tone="subdued" as="p">
-                    Manage your target keywords for product optimization. More keywords = better AI optimization results.
+            {/* Keywords Management Card */}
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text as="h2" variant="headingMd">
+                    SEO Keywords
                   </Text>
+                  {(!user.keywords || user.keywords.length < 3) && (
+                    <Badge tone="attention">
+                      Add 3+ keywords for better results
+                    </Badge>
+                  )}
+                </InlineStack>
 
-                  {/* Add Keyword Input */}
-                  <InlineStack gap="200">
-                    <div style={{ flex: 1 }}>
-                      <TextField
-                        label="New Keyword"
-                        labelHidden
-                        value={newKeyword}
-                        onChange={setNewKeyword}
-                        placeholder="e.g., running shoes"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <Button
-                      onClick={handleAddKeyword}
-                      disabled={isLoading || newKeyword.trim() === ""}
-                      icon={PlusIcon}
-                      loading={isLoading}
-                    >
-                      Add
-                    </Button>
-                  </InlineStack>
+                <Text variant="bodySm" tone="subdued" as="p">
+                  Manage your target keywords for product optimization. More keywords = better AI optimization results.
+                </Text>
 
-                  {/* Keywords List */}
-                  {user.keywords && user.keywords.length > 0 ? (
-                    <BlockStack gap="200">
-                      <Text as="p" variant="bodyMd" fontWeight="semibold">
-                        Your Keywords ({user.keywords.length})
-                      </Text>
-                      <Box
-                        padding="300"
-                        background="bg-surface-secondary"
-                        borderRadius="200"
-                      >
-                        <BlockStack gap="200">
-                          {user.keywords.map((keyword) => (
-                            <InlineStack key={keyword.id} align="space-between">
-                              <Text as="span" variant="bodySm">{keyword.keyword}</Text>
-                              <Button
-                                size="slim"
-                                variant="tertiary"
-                                icon={DeleteIcon}
-                                onClick={() => handleDeleteKeyword(keyword.id)}
-                                disabled={isLoading}
-                                tone="critical"
-                              />
-                            </InlineStack>
-                          ))}
-                        </BlockStack>
-                      </Box>
-                    </BlockStack>
-                  ) : (
+                {/* Add Keyword Input */}
+                <InlineStack gap="200">
+                  <div style={{ flex: 1 }}>
+                    <TextField
+                      label="New Keyword"
+                      labelHidden
+                      value={newKeyword}
+                      onChange={setNewKeyword}
+                      placeholder="e.g., running shoes"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAddKeyword}
+                    disabled={isLoading || newKeyword.trim() === ""}
+                    icon={PlusIcon}
+                    loading={isLoading}
+                  >
+                    Add
+                  </Button>
+                </InlineStack>
+
+                {/* Keywords List */}
+                {user.keywords && user.keywords.length > 0 ? (
+                  <BlockStack gap="200">
+                    <Text as="p" variant="bodyMd" fontWeight="semibold">
+                      Your Keywords ({user.keywords.length})
+                    </Text>
                     <Box
-                      padding="400"
+                      padding="300"
                       background="bg-surface-secondary"
                       borderRadius="200"
                     >
-                      <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                        No keywords added yet. Add your first keyword to get started!
+                      <BlockStack gap="200">
+                        {user.keywords.map((keyword) => (
+                          <InlineStack key={keyword.id} align="space-between">
+                            <Text as="span" variant="bodySm">{keyword.keyword}</Text>
+                            <Button
+                              size="slim"
+                              variant="tertiary"
+                              icon={DeleteIcon}
+                              onClick={() => handleDeleteKeyword(keyword.id)}
+                              disabled={isLoading}
+                              tone="critical"
+                            />
+                          </InlineStack>
+                        ))}
+                      </BlockStack>
+                    </Box>
+                  </BlockStack>
+                ) : (
+                  <Box
+                    padding="400"
+                    background="bg-surface-secondary"
+                    borderRadius="200"
+                  >
+                    <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                      No keywords added yet. Add your first keyword to get started!
+                    </Text>
+                  </Box>
+                )}
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          <Layout.Section variant="oneThird">
+            <BlockStack gap="500">
+              {/* Plan & Credits Card */}
+              <Card>
+                <BlockStack gap="400">
+                  <Text as="h2" variant="headingMd">
+                    Account Overview
+                  </Text>
+
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between">
+                      <Text as="span" variant="bodyMd">
+                        Current Plan
+                      </Text>
+                      <Badge {...getPlanBadge(user.plan)} />
+                    </InlineStack>
+
+                    <InlineStack align="space-between">
+                      <Text as="span" variant="bodyMd">
+                        Optimization Credits
+                      </Text>
+                      <Text as="span" variant="bodyMd" fontWeight="semibold">
+                        {user.credits}
+                      </Text>
+                    </InlineStack>
+
+                    {/* Credits Progress Bar */}
+                    <Box>
+                      <Text variant="bodySm" tone="subdued" as="p">
+                        Credits Usage
+                      </Text>
+                      <ProgressBar
+                        progress={(user.credits / 100) * 100} // Assuming 100 is max for visual
+                        size="small"
+                      />
+                      <Text variant="bodySm" tone="subdued" as="p">
+                        {user.credits > 5 ? "Good" : user.credits > 0 ? "Low" : "Empty"}
                       </Text>
                     </Box>
-                  )}
+                  </BlockStack>
+
+                  <Button
+                    variant="primary"
+                    fullWidth
+                    disabled={user.plan !== "free"}
+                  >
+                    {user.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
+                  </Button>
                 </BlockStack>
               </Card>
-            </Layout.Section>
 
-            <Layout.Section variant="oneThird">
-              <BlockStack gap="500">
-                {/* Plan & Credits Card */}
-                <Card>
-                  <BlockStack gap="400">
-                    <Text as="h2" variant="headingMd">
-                      Account Overview
-                    </Text>
-
-                    <BlockStack gap="300">
-                      <InlineStack align="space-between">
-                        <Text as="span" variant="bodyMd">
-                          Current Plan
-                        </Text>
-                        <Badge {...getPlanBadge(user.plan)} />
-                      </InlineStack>
-
-                      <InlineStack align="space-between">
-                        <Text as="span" variant="bodyMd">
-                          Optimization Credits
-                        </Text>
-                        <Text as="span" variant="bodyMd" fontWeight="semibold">
-                          {user.credits}
-                        </Text>
-                      </InlineStack>
-
-                      {/* Credits Progress Bar */}
-                      <Box>
-                        <Text variant="bodySm" tone="subdued" as="p">
-                          Credits Usage
-                        </Text>
-                        <ProgressBar
-                          progress={(user.credits / 100) * 100} // Assuming 100 is max for visual
-                          size="small"
-                        />
-                        <Text variant="bodySm" tone="subdued" as="p">
-                          {user.credits > 5 ? "Good" : user.credits > 0 ? "Low" : "Empty"}
-                        </Text>
-                      </Box>
-                    </BlockStack>
-
-                    <Button
-                      variant="primary"
-                      fullWidth
-                      disabled={user.plan !== "free"}
-                    >
-                      {user.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
-                    </Button>
-                  </BlockStack>
-                </Card>
-
-                {/* Quick Stats */}
-                <Card>
+              {/* Quick Stats */}
+              <Card>
+                <BlockStack gap="200">
+                  <Text as="h2" variant="headingMd">
+                    Quick Stats
+                  </Text>
                   <BlockStack gap="200">
-                    <Text as="h2" variant="headingMd">
-                      Quick Stats
-                    </Text>
-                    <BlockStack gap="200">
-                      <InlineStack align="space-between">
-                        <Text as="span" variant="bodySm">
-                          Shop
-                        </Text>
-                        <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {user.shop}
-                        </Text>
-                      </InlineStack>
-                      <InlineStack align="space-between">
-                        <Text as="span" variant="bodySm">
-                          Keywords
-                        </Text>
-                        <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {user.keywords?.length || 0}
-                        </Text>
-                      </InlineStack>
-                      <InlineStack align="space-between">
-                        <Text as="span" variant="bodySm">
-                          Member Since
-                        </Text>
-                        <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {new Date(user.createdAt).toLocaleDateString()}
-                        </Text>
-                      </InlineStack>
-                    </BlockStack>
+                    <InlineStack align="space-between">
+                      <Text as="span" variant="bodySm">
+                        Shop
+                      </Text>
+                      <Text as="span" variant="bodySm" fontWeight="semibold">
+                        {user.shop}
+                      </Text>
+                    </InlineStack>
+                    <InlineStack align="space-between">
+                      <Text as="span" variant="bodySm">
+                        Keywords
+                      </Text>
+                      <Text as="span" variant="bodySm" fontWeight="semibold">
+                        {user.keywords?.length || 0}
+                      </Text>
+                    </InlineStack>
+                    <InlineStack align="space-between">
+                      <Text as="span" variant="bodySm">
+                        Member Since
+                      </Text>
+                      <Text as="span" variant="bodySm" fontWeight="semibold">
+                        {new Date(user.createdAt).toLocaleDateString()}
+                      </Text>
+                    </InlineStack>
                   </BlockStack>
-                </Card>
-              </BlockStack>
-            </Layout.Section>
-          </Layout>
-        </BlockStack>
-        {toastMarkup}
-      </ClientOnly>
+                </BlockStack>
+              </Card>
+            </BlockStack>
+          </Layout.Section>
+        </Layout>
+      </BlockStack>
+      {toastMarkup}
     </Page>
   );
 }

@@ -29,8 +29,8 @@ import prisma from "../db.server";
 import { ClientOnly } from "../components/ClientOnly";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  // Ensure this only runs on the server
-  if (typeof window !== "undefined") {
+  // Ensure this only runs on the server - check for Node.js environment
+  if (typeof process === "undefined" || !process.env) {
     throw new Error("This loader should only run on the server");
   }
 
@@ -57,8 +57,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  // Ensure this only runs on the server
-  if (typeof window !== "undefined") {
+  // Ensure this only runs on the server - check for Node.js environment
+  if (typeof process === "undefined" || !process.env) {
     throw new Error("This action should only run on the server");
   }
 

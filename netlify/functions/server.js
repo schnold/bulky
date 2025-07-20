@@ -49,12 +49,14 @@ if (typeof window === "undefined") {
 const baseHandler = createRequestHandler({
   build,
   mode: process.env.NODE_ENV || "production",
+  getLoadContext: () => ({}),
 });
 
 export const handler = async (event, context) => {
   try {
     // Add request logging for debugging
     console.log(`🌐 Request: ${event.httpMethod} ${event.path}`);
+    console.log(`🌐 Headers:`, JSON.stringify(event.headers, null, 2));
     
     // Check for database URL (Netlify provides DATABASE_URL automatically)
     const databaseUrl = process.env.DATABASE_URL || process.env.NETLIFY_DATABASE_URL;
@@ -68,11 +70,9 @@ export const handler = async (event, context) => {
     console.log(`- SHOPIFY_APP_URL: ${process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET'}`);
     console.log(`- SCOPES: ${process.env.SCOPES ? 'SET' : 'NOT SET'}`);
     console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'NOT SET'}`);
-    console.log(`- Available env vars:`, Object.keys(process.env).filter(key => key.includes('SHOPIFY') || key.includes('DATABASE')));
     
     if (!databaseUrl) {
       console.error("❌ No database URL found in environment variables");
-      console.error("Available env vars:", Object.keys(process.env).filter(key => key.includes('DATABASE')));
       return {
         statusCode: 500,
         body: JSON.stringify({ 
@@ -89,14 +89,49 @@ export const handler = async (event, context) => {
     if (!process.env.DATABASE_URL && process.env.NETLIFY_DATABASE_URL) {
       process.env.DATABASE_URL = process.env.NETLIFY_DATABASE_URL;
     }
+
+    // Create a proper Request object for Remix
+    const url = new URL(event.path, `https://${event.headers.host || 'localhost'}`);
+    
+    // Add query parameters
+    if (event.queryStringParameters) {
+      Object.entries(event.queryStringParameters).forEach(([key, value]) => {
+        if (value) url.searchParams.set(key, value);
+      });
+    }
+
+    // Create the request
+    const request = new Request(url.toString(), {
+      method: event.httpMethod,
+      headers: new Headers(event.headers),
+      body: event.body && event.httpMethod !== 'GET' && event.httpMethod !== 'HEAD' 
+        ? event.isBase64Encoded 
+          ? Buffer.from(event.body, 'base64').toString() 
+          : event.body
+        : undefined,
+    });
+
+    console.log(`🔍 Created request for URL: ${request.url}`);
+    console.log(`🔍 Request method: ${request.method}`);
     
     // Handle the request
-    const response = await baseHandler(event, context);
+    const response = await baseHandler(request, context);
     
     // Log response status for debugging
-    console.log(`✅ Response status: ${response.statusCode}`);
+    console.log(`✅ Response status: ${response.status}`);
     
-    return response;
+    // Convert Response to Netlify format
+    const body = await response.text();
+    const headers = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    return {
+      statusCode: response.status,
+      headers,
+      body,
+    };
   } catch (error) {
     console.error("❌ Server function error:", error);
     console.error("❌ Error stack:", error.stack);

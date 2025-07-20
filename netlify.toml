@@ -2,6 +2,9 @@
   publish = "build/client"
   command = "npm ci && npx prisma generate && npm run build"
 
+[build.processing]
+  skip_processing = false
+
 [build.environment]
   SECRETS_SCAN_OMIT_PATHS = "shopify.app.toml,.env,.env.local,.env.production,build/**,README.md,Dockerfile"
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,SHOPIFY_APP_URL,SHOPIFY_API_KEY,SHOPIFY_CLIENT_ID"
@@ -28,6 +31,30 @@
 [[redirects]]
   from = "/favicon.ico"
   to = "/favicon.ico"
+  status = 200
+
+# Handle app routes specifically
+[[redirects]]
+  from = "/app/*"
+  to = "/.netlify/functions/server"
+  status = 200
+
+# Handle API routes
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/server"
+  status = 200
+
+# Handle auth routes
+[[redirects]]
+  from = "/auth/*"
+  to = "/.netlify/functions/server"
+  status = 200
+
+# Handle webhooks
+[[redirects]]
+  from = "/webhooks/*"
+  to = "/.netlify/functions/server"
   status = 200
 
 # Send all other requests to the server function

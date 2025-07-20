@@ -4,12 +4,9 @@ import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider } from "@shopify/polaris";
 import { NavMenu } from "@shopify/app-bridge-react";
-import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
 import { ensureUserAndSession } from "../utils/session.server";
-
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
 
@@ -46,7 +43,38 @@ export default function App() {
 
   return (
     <ShopifyAppProvider isEmbeddedApp apiKey={apiKey}>
-      <AppProvider i18n={{}}>
+      <AppProvider i18n={{
+        Polaris: {
+          Avatar: {
+            label: 'Avatar',
+            labelWithInitials: 'Avatar with initials {initials}',
+          },
+          ContextualSaveBar: {
+            save: 'Save',
+            discard: 'Discard',
+          },
+          TextField: {
+            characterCount: '{count} characters',
+          },
+          TopBar: {
+            toggleMenuLabel: 'Toggle menu',
+            SearchField: {
+              clearButtonLabel: 'Clear',
+              search: 'Search',
+            },
+          },
+          Modal: {
+            iFrameTitle: 'body markup',
+          },
+          Frame: {
+            skipToContent: 'Skip to content',
+            navigationLabel: 'Navigation',
+            Navigation: {
+              closeMobileNavigationLabel: 'Close navigation',
+            },
+          },
+        },
+      }}>
         <NavMenu>
           <Link to="/app" rel="home">
             Home

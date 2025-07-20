@@ -26,7 +26,6 @@ import {
   Icon,
   Thumbnail,
   Box,
-  Divider,
 } from "@shopify/polaris";
 import { MagicIcon, CheckIcon, CreditCardIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -1108,7 +1107,11 @@ export default function Products() {
 
                         {/* Divider between items (except last) */}
                         {!isLast && (
-                          <Divider />
+                          <div style={{
+                            height: '1px',
+                            backgroundColor: 'var(--p-color-border-subdued)',
+                            margin: '16px 0'
+                          }} />
                         )}
                       </div>
                     );

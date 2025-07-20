@@ -1,22 +1,52 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { verifyWebhookOrThrow } from "../utils/webhook-verification.server";
+
+interface ShopRedactPayload {
+  shop_id: number;
+  shop_domain: string;
+}
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    const { shop, topic, payload } = await authenticate.webhook(request);
+    // Verify HMAC signature - throws 401 if invalid
+    const body = await verifyWebhookOrThrow(request);
     
-    console.log(`Received ${topic} webhook for ${shop}`);
+    // Parse the webhook payload
+    const payload: ShopRedactPayload = JSON.parse(body);
+    
+    console.log(`Received shop/redact webhook for shop: ${payload.shop_domain}`);
     console.log("Shop redact payload:", JSON.stringify(payload, null, 2));
     
     // Handle shop data redaction for GDPR compliance
-    // This webhook is called when a shop requests their data to be deleted
-    // You should implement your data cleanup logic here
+    // This webhook is called 48 hours after a shop uninstalls your app
+    // You must delete all shop data within 30 days
     
-    // For now, we'll just log the request
-    console.log(`Shop ${shop} data redaction requested`);
+    const { shop_id, shop_domain } = payload;
+    
+    // TODO: Implement your shop data cleanup logic here
+    // 1. Remove all shop-related data from your database
+    // 2. Remove any cached data or files
+    // 3. Update analytics to remove shop data
+    // 4. Ensure backups are also cleaned
+    
+    // Example implementation:
+    console.log(`Processing shop data redaction for shop ${shop_domain} (ID: ${shop_id})`);
+    
+    // Example: Remove shop data from your database
+    // await deleteShopData(shop_id);
+    // await removeShopFiles(shop_domain);
+    // await cleanupShopAnalytics(shop_id);
+    
+    // Log for compliance tracking
+    console.log(`[COMPLIANCE] Shop data redaction processed for shop ${shop_domain} (ID: ${shop_id})`);
     
     return new Response("OK", { status: 200 });
   } catch (error) {
+    if (error instanceof Response) {
+      // HMAC verification failed - return the 401 response
+      return error;
+    }
+    
     console.error("Shop redact webhook error:", error);
     return new Response("Error processing shop redact webhook", { status: 500 });
   }

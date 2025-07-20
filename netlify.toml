@@ -1,9 +1,21 @@
 [build]
   command = "npm ci && npx prisma generate && npm run build"
+  publish = "build/client"
 
 [build.environment]
   SECRETS_SCAN_OMIT_PATHS = "shopify.app.toml,.env,.env.local,.env.production,build/**,README.md,Dockerfile"
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,SHOPIFY_APP_URL,SHOPIFY_API_KEY,SHOPIFY_CLIENT_ID"
   NODE_ENV = "production"
+
+# Correct MIME types for assets
+[[headers]]
+  for = "*.css"
+  [headers.values]
+    Content-Type = "text/css"
+
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Content-Type = "application/javascript"
 
 # The Netlify Remix adapter will handle the functions configuration automatically

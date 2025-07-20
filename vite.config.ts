@@ -63,6 +63,7 @@ export default defineConfig({
       },
       serverBuildFile: "index.js",
       buildDirectory: "build",
+      ssr: true,
     }),
     tsconfigPaths(),
   ],
@@ -73,7 +74,7 @@ export default defineConfig({
     include: ["@shopify/app-bridge-react", "@shopify/polaris"],
   },
   ssr: {
-    noExternal: ["@shopify/polaris", "@shopify/app-bridge-react"],
+    noExternal: ["@shopify/polaris", "@shopify/app-bridge-react", "@shopify/shopify-app-remix"],
     external: ["react", "react-dom"],
   },
 }) satisfies UserConfig;

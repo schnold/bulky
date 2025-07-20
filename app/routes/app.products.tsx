@@ -83,6 +83,11 @@ interface OptimizationContext {
 
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Ensure this only runs on the server
+  if (typeof window !== "undefined") {
+    throw new Error("This loader should only run on the server");
+  }
+
   try {
     console.log(`🔍 Products loader - Request URL: ${request.url}`);
     console.log(`🔍 Products loader - Environment check:`, {
@@ -91,8 +96,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET',
       SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET',
     });
-
-    // Loader can run in both server and browser contexts during hydration
 
     // Validate required environment variables
     console.log(`🔍 Products loader - Environment variables check:`, {
@@ -271,6 +274,22 @@ export default function Products() {
             </Text>
             <Text variant="bodyMd" tone="subdued" as="p">
               {loaderData.details}
+            </Text>
+          </Box>
+        </Card>
+      </Page>
+    );
+  }
+  
+  // Ensure we have valid data before proceeding
+  if (!loaderData || typeof loaderData !== 'object') {
+    return (
+      <Page>
+        <TitleBar title="Products" />
+        <Card>
+          <Box padding="600">
+            <Text variant="headingMd" as="h2">
+              Loading Products...
             </Text>
           </Box>
         </Card>

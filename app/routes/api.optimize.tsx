@@ -195,6 +195,11 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // Ensure this only runs on the server
+  if (typeof window !== "undefined") {
+    throw new Error("This action should only run on the server");
+  }
+
   const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");

@@ -29,6 +29,11 @@ import prisma from "../db.server";
 import { ClientOnly } from "../components/ClientOnly";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Ensure this only runs on the server
+  if (typeof window !== "undefined") {
+    throw new Error("This loader should only run on the server");
+  }
+
   const { admin, session } = await authenticate.admin(request);
 
   if (!session || !session.shop) {
@@ -52,6 +57,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // Ensure this only runs on the server
+  if (typeof window !== "undefined") {
+    throw new Error("This action should only run on the server");
+  }
+
   try {
     const { admin, session } = await authenticate.admin(request);
 

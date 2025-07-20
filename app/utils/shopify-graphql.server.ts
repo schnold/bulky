@@ -16,7 +16,9 @@ export async function shopifyGraphQL<T = any>(
   query: string,
   variables?: Record<string, any>
 ): Promise<ShopifyGraphQLResponse<T>> {
-  const url = `https://${shop}.myshopify.com/admin/api/2025-01/graphql.json`;
+  // Handle shop domain - if it already includes .myshopify.com, use as-is, otherwise append it
+  const shopDomain = shop.includes('.myshopify.com') ? shop : `${shop}.myshopify.com`;
+  const url = `https://${shopDomain}/admin/api/2025-01/graphql.json`;
   
   const response = await fetch(url, {
     method: 'POST',

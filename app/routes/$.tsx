@@ -42,7 +42,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     });
   }
-  
+
   // This catch-all route should only handle truly unmatched routes
   // All /app/* routes should be handled by their specific route files
   throw new Response("Not Found", { status: 404 });

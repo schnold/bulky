@@ -35,6 +35,12 @@ export function ErrorBoundary() {
   const error = useRouteError();
   
   console.error("Root ErrorBoundary caught error:", error);
+  console.error("Error details:", {
+    message: error instanceof Error ? error.message : 'Unknown error',
+    stack: error instanceof Error ? error.stack : 'No stack trace',
+    type: typeof error,
+    isRouteError: isRouteErrorResponse(error)
+  });
   
   if (isRouteErrorResponse(error)) {
     return (

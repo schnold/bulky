@@ -2,7 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-remix/react";
-import { AppProvider } from "@shopify/polaris";
+
 import { NavMenu } from "@shopify/app-bridge-react";
 
 import { authenticate } from "../shopify.server";
@@ -44,47 +44,14 @@ export default function App() {
 
   return (
     <ShopifyAppProvider isEmbeddedApp apiKey={apiKey}>
-      <AppProvider i18n={{
-        Polaris: {
-          Avatar: {
-            label: 'Avatar',
-            labelWithInitials: 'Avatar with initials {initials}',
-          },
-          ContextualSaveBar: {
-            save: 'Save',
-            discard: 'Discard',
-          },
-          TextField: {
-            characterCount: '{count} characters',
-          },
-          TopBar: {
-            toggleMenuLabel: 'Toggle menu',
-            SearchField: {
-              clearButtonLabel: 'Clear',
-              search: 'Search',
-            },
-          },
-          Modal: {
-            iFrameTitle: 'body markup',
-          },
-          Frame: {
-            skipToContent: 'Skip to content',
-            navigationLabel: 'Navigation',
-            Navigation: {
-              closeMobileNavigationLabel: 'Close navigation',
-            },
-          },
-        },
-      }}>
-        <NavMenu>
-          <Link to="/app" rel="home">
-            Home
-          </Link>
-          <Link to="/app/products">SEO Optimizer</Link>
-          <Link to="/app/pricing">Pricing</Link>
-        </NavMenu>
-        <Outlet />
-      </AppProvider>
+      <NavMenu>
+        <Link to="/app" rel="home">
+          Home
+        </Link>
+        <Link to="/app/products">SEO Optimizer</Link>
+        <Link to="/app/pricing">Pricing</Link>
+      </NavMenu>
+      <Outlet />
     </ShopifyAppProvider>
   );
 }

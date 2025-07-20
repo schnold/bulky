@@ -7,6 +7,7 @@ import {
   useRouteError,
   isRouteErrorResponse,
 } from "@remix-run/react";
+import { AppProvider } from "@shopify/polaris";
 import "@shopify/polaris/build/esm/styles.css";
 
 export default function App() {
@@ -24,7 +25,9 @@ export default function App() {
         <Links />
       </head>
       <body>
-        <Outlet />
+        <AppProvider i18n={{}}>
+          <Outlet />
+        </AppProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -34,7 +37,7 @@ export default function App() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
-  
+
   console.error("Root ErrorBoundary caught error:", error);
   console.error("Error details:", {
     message: error instanceof Error ? error.message : 'Unknown error',
@@ -42,7 +45,7 @@ export function ErrorBoundary() {
     type: typeof error,
     isRouteError: isRouteErrorResponse(error)
   });
-  
+
   if (isRouteErrorResponse(error)) {
     return (
       <html>
@@ -52,11 +55,13 @@ export function ErrorBoundary() {
           <Links />
         </head>
         <body>
-          <div style={{ padding: "20px", fontFamily: "system-ui" }}>
-            <h1>Error {error.status}</h1>
-            <p>{error.statusText}</p>
-            <p>Something went wrong. Please try refreshing the page.</p>
-          </div>
+          <AppProvider i18n={{}}>
+            <div style={{ padding: "20px", fontFamily: "system-ui" }}>
+              <h1>Error {error.status}</h1>
+              <p>{error.statusText}</p>
+              <p>Something went wrong. Please try refreshing the page.</p>
+            </div>
+          </AppProvider>
           <Scripts />
         </body>
       </html>
@@ -71,15 +76,17 @@ export function ErrorBoundary() {
         <Links />
       </head>
       <body>
-        <div style={{ padding: "20px", fontFamily: "system-ui" }}>
-          <h1>Application Error</h1>
-          <p>Something went wrong. Please try refreshing the page.</p>
-          {process.env.NODE_ENV === "development" && (
-            <pre style={{ background: "#f5f5f5", padding: "10px", overflow: "auto" }}>
-              {error instanceof Error ? error.stack : String(error)}
-            </pre>
-          )}
-        </div>
+        <AppProvider i18n={{}}>
+          <div style={{ padding: "20px", fontFamily: "system-ui" }}>
+            <h1>Application Error</h1>
+            <p>Something went wrong. Please try refreshing the page.</p>
+            {process.env.NODE_ENV === "development" && (
+              <pre style={{ background: "#f5f5f5", padding: "10px", overflow: "auto" }}>
+                {error instanceof Error ? error.stack : String(error)}
+              </pre>
+            )}
+          </div>
+        </AppProvider>
         <Scripts />
       </body>
     </html>

@@ -4,8 +4,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
+  console.log(`🔍 Catch-all route hit for: ${pathname}`);
+
   // Handle __manifest requests
   if (pathname === "/__manifest") {
+    console.log(`🔍 Handling manifest request`);
     const searchParams = url.searchParams;
 
     // Get all the 'p' parameters (pages) from the query string
@@ -26,6 +29,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       timestamp: new Date().toISOString(),
     };
 
+    console.log(`🔍 Returning manifest:`, manifest);
+
     return new Response(JSON.stringify(manifest), {
       status: 200,
       headers: {
@@ -37,8 +42,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     });
   }
-
-  console.log(`🔍 Catch-all route hit for: ${pathname}`);
   
   // This catch-all route should only handle truly unmatched routes
   // All /app/* routes should be handled by their specific route files

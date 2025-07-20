@@ -1,7 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
 
-export async function loader({ request, params }: LoaderFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
@@ -27,7 +26,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       timestamp: new Date().toISOString(),
     };
 
-    return json(manifest, {
+    return new Response(JSON.stringify(manifest), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
@@ -39,6 +38,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  // For other routes, throw a 404
+  console.log(`🔍 Catch-all route hit for: ${pathname}`);
+  
+  // This catch-all route should only handle truly unmatched routes
+  // All /app/* routes should be handled by their specific route files
   throw new Response("Not Found", { status: 404 });
 }

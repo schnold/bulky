@@ -83,10 +83,6 @@ interface OptimizationContext {
 
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  // Ensure this only runs on the server - check for Node.js environment
-  if (typeof process === "undefined" || !process.env) {
-    throw new Error("This loader should only run on the server");
-  }
 
   try {
     console.log(`🔍 Products loader - Request URL: ${request.url}`);
@@ -111,9 +107,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       throw new Error("Missing required Shopify environment variables");
     }
 
-    const { admin, session } = await authenticate.admin(request);
+    const { session } = await authenticate.admin(request);
 
-    if (!session || !session.shop) {
+    if (!session || !session.shop || !session.accessToken) {
       throw new Error("No valid session found");
     }
 
@@ -158,44 +154,45 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     console.log(`🔍 Products loader - Making GraphQL query with filters:`, { queryString, first, last, after, before });
 
-    const response = await admin.graphql(
-      `#graphql
-        query getProducts($first: Int, $last: Int, $after: String, $before: String, $query: String) {
-          products(first: $first, last: $last, after: $after, before: $before, query: $query) {
-            edges {
-              node {
-                id
-                title
-                descriptionHtml
-                handle
-                status
-                productType
-                vendor
-                tags
-                createdAt
-                featuredImage {
-                  url
-                  altText
-                }
+    // Use serverless-compatible GraphQL client
+    const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
+    const adminClient = createServerlessAdminClient(session.shop, session.accessToken);
+
+    const response = await adminClient.graphql(
+      `query getProducts($first: Int, $last: Int, $after: String, $before: String, $query: String) {
+        products(first: $first, last: $last, after: $after, before: $before, query: $query) {
+          edges {
+            node {
+              id
+              title
+              descriptionHtml
+              handle
+              status
+              productType
+              vendor
+              tags
+              createdAt
+              featuredImage {
+                url
+                altText
               }
-              cursor
             }
-            pageInfo {
-              hasNextPage
-              hasPreviousPage
-              startCursor
-              endCursor
-            }
+            cursor
           }
-        }`,
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor
+          }
+        }
+      }`,
       {
-        variables: {
-          first,
-          last,
-          after,
-          before,
-          query: queryString,
-        },
+        first,
+        last,
+        after,
+        before,
+        query: queryString,
       }
     );
 

@@ -113,10 +113,6 @@ interface LoaderData {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  // Ensure this only runs on the server - check for Node.js environment
-  if (typeof process === "undefined" || !process.env) {
-    throw new Error("This loader should only run on the server");
-  }
 
   const { session, billing } = await authenticate.admin(request);
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");

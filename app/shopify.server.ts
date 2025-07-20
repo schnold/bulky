@@ -1,3 +1,4 @@
+// Use a serverless-compatible approach instead of the Node.js adapter
 import "@shopify/shopify-app-remix/adapters/node";
 import {
   ApiVersion,

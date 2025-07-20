@@ -195,12 +195,8 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  // Ensure this only runs on the server - check for Node.js environment
-  if (typeof process === "undefined" || !process.env) {
-    throw new Error("This action should only run on the server");
-  }
 
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
   const productIds = JSON.parse(formData.get("productIds") as string);
@@ -241,21 +237,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`📦 Optimizing product ${i + 1}/${productIds.length}: ${productId}`);
 
       try {
+        // Use serverless-compatible GraphQL client
+        const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
+        const adminClient = createServerlessAdminClient(session.shop, session.accessToken);
+
         // First, get the current product data
-        const productResponse = await admin.graphql(
-          `#graphql
-            query getProduct($id: ID!) {
-              product(id: $id) {
-                id
-                title
-                descriptionHtml
-                handle
-                productType
-                vendor
-                tags
-              }
-            }`,
-          { variables: { id: productId } }
+        const productResponse = await adminClient.graphql(
+          `query getProduct($id: ID!) {
+            product(id: $id) {
+              id
+              title
+              descriptionHtml
+              handle
+              productType
+              vendor
+              tags
+            }
+          }`,
+          { id: productId }
         );
 
         const productData = await productResponse.json();
@@ -286,37 +285,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           tags: optimizedData.tags,
         });
 
-        const updateResponse = await admin.graphql(
-          `#graphql
-            mutation updateProduct($product: ProductUpdateInput!) {
-              productUpdate(product: $product) {
-                product {
-                  id
-                  title
-                  descriptionHtml
-                  handle
-                  productType
-                  vendor
-                  tags
-                  status
-                }
-                userErrors {
-                  field
-                  message
-                }
+        const updateResponse = await adminClient.graphql(
+          `mutation updateProduct($product: ProductUpdateInput!) {
+            productUpdate(product: $product) {
+              product {
+                id
+                title
+                descriptionHtml
+                handle
+                productType
+                vendor
+                tags
+                status
               }
-            }`,
+              userErrors {
+                field
+                message
+              }
+            }
+          }`,
           {
-            variables: {
-              product: {
-                id: productId,
-                title: optimizedData.title,
-                descriptionHtml: optimizedData.description,
-                handle: optimizedData.handle,
-                productType: optimizedData.productType,
-                vendor: optimizedData.vendor || "",
-                tags: optimizedData.tags,
-              },
+            product: {
+              id: productId,
+              title: optimizedData.title,
+              descriptionHtml: optimizedData.description,
+              handle: optimizedData.handle,
+              productType: optimizedData.productType,
+              vendor: optimizedData.vendor || "",
+              tags: optimizedData.tags,
             },
           }
         );

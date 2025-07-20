@@ -1,7 +1,8 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
-import { AppProvider } from "@shopify/shopify-app-remix/react";
+import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-remix/react";
+import { AppProvider } from "@shopify/polaris";
 import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
@@ -44,16 +45,18 @@ export default function App() {
   console.log(`🎨 App component rendering with API key: ${apiKey ? 'SET' : 'NOT SET'}`);
 
   return (
-    <AppProvider isEmbeddedApp apiKey={apiKey}>
-      <NavMenu>
-        <Link to="/app" rel="home">
-          Home
-        </Link>
-        <Link to="/app/products">SEO Optimizer</Link>
-        <Link to="/app/pricing">Pricing</Link>
-      </NavMenu>
-      <Outlet />
-    </AppProvider>
+    <ShopifyAppProvider isEmbeddedApp apiKey={apiKey}>
+      <AppProvider i18n={{}}>
+        <NavMenu>
+          <Link to="/app" rel="home">
+            Home
+          </Link>
+          <Link to="/app/products">SEO Optimizer</Link>
+          <Link to="/app/pricing">Pricing</Link>
+        </NavMenu>
+        <Outlet />
+      </AppProvider>
+    </ShopifyAppProvider>
   );
 }
 

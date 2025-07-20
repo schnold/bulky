@@ -9,8 +9,6 @@ import {
 } from "@remix-run/react";
 import "@shopify/polaris/build/esm/styles.css";
 
-export const links = () => [];
-
 export default function App() {
   return (
     <html>

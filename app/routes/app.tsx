@@ -40,6 +40,7 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
 
   console.log(`🎨 App component rendering with API key: ${apiKey ? 'SET' : 'NOT SET'}`);
+  console.log(`🎨 Current URL: ${typeof window !== 'undefined' ? window.location.href : 'server-side'}`);
 
   return (
     <ShopifyAppProvider isEmbeddedApp apiKey={apiKey}>
@@ -92,6 +93,26 @@ export default function App() {
 export function ErrorBoundary() {
   const error = useRouteError();
   console.error("❌ App ErrorBoundary caught error:", error);
+  
+  // Show a more helpful error message during development
+  if (process.env.NODE_ENV === "development") {
+    return (
+      <div style={{ padding: "20px", fontFamily: "system-ui" }}>
+        <h1>App Route Error</h1>
+        <p>There was an error in the /app route. Check the console for details.</p>
+        <pre style={{ background: "#f5f5f5", padding: "10px", overflow: "auto" }}>
+          {error instanceof Error ? error.stack : String(error)}
+        </pre>
+        <p><strong>Common fixes:</strong></p>
+        <ul>
+          <li>Make sure you're accessing /app route</li>
+          <li>Check your .env file has correct Shopify credentials</li>
+          <li>Ensure your app is properly installed in Shopify</li>
+        </ul>
+      </div>
+    );
+  }
+  
   return boundary.error(error);
 }
 

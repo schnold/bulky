@@ -4,14 +4,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useRouteError,
-  isRouteErrorResponse,
 } from "@remix-run/react";
-import polarisStyles from "./styles/polaris.css?url";
-
-export const links = () => [
-  { rel: "stylesheet", href: polarisStyles }
-];
 
 export default function App() {
   return (
@@ -36,56 +29,3 @@ export default function App() {
   );
 }
 
-export function ErrorBoundary() {
-  const error = useRouteError();
-
-  console.error("Root ErrorBoundary caught error:", error);
-  console.error("Error details:", {
-    message: error instanceof Error ? error.message : 'Unknown error',
-    stack: error instanceof Error ? error.stack : 'No stack trace',
-    type: typeof error,
-    isRouteError: isRouteErrorResponse(error)
-  });
-
-  if (isRouteErrorResponse(error)) {
-    return (
-      <html>
-        <head>
-          <title>Error {error.status}</title>
-          <Meta />
-          <Links />
-        </head>
-        <body>
-          <div style={{ padding: "20px", fontFamily: "system-ui" }}>
-            <h1>Error {error.status}</h1>
-            <p>{error.statusText}</p>
-            <p>Something went wrong. Please try refreshing the page.</p>
-          </div>
-          <Scripts />
-        </body>
-      </html>
-    );
-  }
-
-  return (
-    <html>
-      <head>
-        <title>Application Error</title>
-        <Meta />
-        <Links />
-      </head>
-              <body>
-          <div style={{ padding: "20px", fontFamily: "system-ui" }}>
-            <h1>Application Error</h1>
-            <p>Something went wrong. Please try refreshing the page.</p>
-            {process.env.NODE_ENV === "development" && (
-              <pre style={{ background: "#f5f5f5", padding: "10px", overflow: "auto" }}>
-                {error instanceof Error ? error.stack : String(error)}
-              </pre>
-            )}
-          </div>
-          <Scripts />
-        </body>
-    </html>
-  );
-}

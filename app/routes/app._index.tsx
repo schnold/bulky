@@ -19,14 +19,12 @@ import {
   Badge,
   TextField,
   Toast,
-  Frame,
   ProgressBar,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { DeleteIcon, PlusIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { ClientOnly } from "../components/ClientOnly";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
 

@@ -7,6 +7,15 @@ import {
   useRouteError,
   isRouteErrorResponse,
 } from "@remix-run/react";
+import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+
+export const links = () => [
+  { rel: "stylesheet", href: polarisStyles },
+  {
+    rel: "stylesheet",
+    href: "https://cdn.shopify.com/static/fonts/inter/v4/styles.css"
+  }
+];
 
 export default function App() {
   return (

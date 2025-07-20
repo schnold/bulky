@@ -19,7 +19,6 @@ import {
   Frame,
   Collapsible,
 } from "@shopify/polaris";
-import { ClientOnly } from "../components/ClientOnly";
 import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -457,13 +456,7 @@ export default function Pricing() {
   ) : null;
 
   return (
-    <ClientOnly fallback={
-      <Page>
-        <TitleBar title="Pricing & Plans" />
-        <div>Loading...</div>
-      </Page>
-    }>
-      <Frame>
+    <Frame>
         <Page>
           <TitleBar title="Pricing & Plans" />
 
@@ -601,6 +594,5 @@ export default function Pricing() {
           {toastMarkup}
         </Page>
       </Frame>
-    </ClientOnly>
   );
 }

@@ -31,7 +31,6 @@ import {
 import { MagicIcon, CheckIcon, CreditCardIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { ClientOnly } from "../components/ClientOnly";
 
 interface Product {
   id: string;
@@ -717,13 +716,7 @@ export default function Products() {
   ) : null;
 
   return (
-    <ClientOnly fallback={
-      <Page>
-        <TitleBar title="Products" />
-        <div>Loading...</div>
-      </Page>
-    }>
-      <Frame>
+    <Frame>
         <Page>
           <TitleBar title="Products" />
 
@@ -1292,6 +1285,5 @@ export default function Products() {
         </Modal>
         </Page>
       </Frame>
-    </ClientOnly>
   );
 }

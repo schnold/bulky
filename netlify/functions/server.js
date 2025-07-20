@@ -46,17 +46,12 @@ if (typeof window === "undefined") {
   }
 }
 
-const baseHandler = createRequestHandler({
+export const handler = createRequestHandler({
   build,
   mode: process.env.NODE_ENV || "production",
-  getLoadContext: () => ({}),
-});
-
-export const handler = async (event, context) => {
-  try {
+  getLoadContext: (event, context) => {
     // Add request logging for debugging
     console.log(`🌐 Request: ${event.httpMethod} ${event.path}`);
-    console.log(`🌐 Headers:`, JSON.stringify(event.headers, null, 2));
     
     // Check for database URL (Netlify provides DATABASE_URL automatically)
     const databaseUrl = process.env.DATABASE_URL || process.env.NETLIFY_DATABASE_URL;
@@ -71,81 +66,14 @@ export const handler = async (event, context) => {
     console.log(`- SCOPES: ${process.env.SCOPES ? 'SET' : 'NOT SET'}`);
     console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'NOT SET'}`);
     
-    if (!databaseUrl) {
-      console.error("❌ No database URL found in environment variables");
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ 
-          error: "Database configuration error",
-          details: "No DATABASE_URL or NETLIFY_DATABASE_URL found"
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      };
-    }
-    
     // Set the database URL for Prisma if it's not already set
     if (!process.env.DATABASE_URL && process.env.NETLIFY_DATABASE_URL) {
       process.env.DATABASE_URL = process.env.NETLIFY_DATABASE_URL;
     }
 
-    // Create a proper Request object for Remix
-    const url = new URL(event.path, `https://${event.headers.host || 'localhost'}`);
-    
-    // Add query parameters
-    if (event.queryStringParameters) {
-      Object.entries(event.queryStringParameters).forEach(([key, value]) => {
-        if (value) url.searchParams.set(key, value);
-      });
-    }
-
-    // Create the request
-    const request = new Request(url.toString(), {
-      method: event.httpMethod,
-      headers: new Headers(event.headers),
-      body: event.body && event.httpMethod !== 'GET' && event.httpMethod !== 'HEAD' 
-        ? event.isBase64Encoded 
-          ? Buffer.from(event.body, 'base64').toString() 
-          : event.body
-        : undefined,
-    });
-
-    console.log(`🔍 Created request for URL: ${request.url}`);
-    console.log(`🔍 Request method: ${request.method}`);
-    
-    // Handle the request
-    const response = await baseHandler(request, context);
-    
-    // Log response status for debugging
-    console.log(`✅ Response status: ${response.status}`);
-    
-    // Convert Response to Netlify format
-    const body = await response.text();
-    const headers = {};
-    response.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-
     return {
-      statusCode: response.status,
-      headers,
-      body,
+      event,
+      context,
     };
-  } catch (error) {
-    console.error("❌ Server function error:", error);
-    console.error("❌ Error stack:", error.stack);
-    
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ 
-        error: "Internal server error",
-        message: error.message,
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined
-      }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-  }
-};
+  },
+});

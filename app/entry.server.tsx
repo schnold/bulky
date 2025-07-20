@@ -9,9 +9,6 @@ import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { StrictMode } from "react";
 
-// Import Polaris styles for server-side rendering
-import "@shopify/polaris/build/esm/styles.css";
-
 export const streamTimeout = 5000;
 
 export default async function handleRequest(

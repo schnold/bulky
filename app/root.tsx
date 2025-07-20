@@ -7,9 +7,11 @@ import {
   useRouteError,
   isRouteErrorResponse,
 } from "@remix-run/react";
+import polarisStyles from "./styles/polaris.css?url";
 
-// Import Polaris styles directly
-import "@shopify/polaris/build/esm/styles.css";
+export const links = () => [
+  { rel: "stylesheet", href: polarisStyles }
+];
 
 export default function App() {
   return (

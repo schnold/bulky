@@ -7,15 +7,36 @@
   SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,SHOPIFY_APP_URL,SHOPIFY_API_KEY,SHOPIFY_CLIENT_ID"
   NODE_ENV = "production"
 
+[functions]
+  directory = "netlify/functions"
+
 # Correct MIME types for assets
 [[headers]]
-  for = "*.css"
+  for = "/assets/*"
   [headers.values]
     Content-Type = "text/css"
+    Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "*.js"
+  for = "/assets/*.js"
   [headers.values]
     Content-Type = "application/javascript"
+    Cache-Control = "public, max-age=31536000, immutable"
 
-# The Netlify Remix adapter will handle the functions configuration automatically
+[[headers]]
+  for = "/assets/*.css"
+  [headers.values]
+    Content-Type = "text/css"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Static assets should be served directly
+[[redirects]]
+  from = "/assets/*"
+  to = "/assets/:splat"
+  status = 200
+
+# Netlify function for Remix server-side rendering
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/server"
+  status = 200

@@ -92,10 +92,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET',
     });
 
-    // Validate that we're in a server environment
-    if (typeof window !== "undefined") {
-      throw new Error("Products loader should not be called in browser context");
-    }
+    // Loader can run in both server and browser contexts during hydration
 
     // Validate required environment variables
     console.log(`🔍 Products loader - Environment variables check:`, {

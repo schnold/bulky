@@ -7,7 +7,6 @@ import {
   useRouteError,
   isRouteErrorResponse,
 } from "@remix-run/react";
-import { AppProvider } from "@shopify/polaris";
 
 // Import Polaris styles directly
 import "@shopify/polaris/build/esm/styles.css";
@@ -27,9 +26,7 @@ export default function App() {
         <Links />
       </head>
       <body>
-        <AppProvider i18n={{}}>
-          <Outlet />
-        </AppProvider>
+        <Outlet />
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -57,13 +54,11 @@ export function ErrorBoundary() {
           <Links />
         </head>
         <body>
-          <AppProvider i18n={{}}>
-            <div style={{ padding: "20px", fontFamily: "system-ui" }}>
-              <h1>Error {error.status}</h1>
-              <p>{error.statusText}</p>
-              <p>Something went wrong. Please try refreshing the page.</p>
-            </div>
-          </AppProvider>
+          <div style={{ padding: "20px", fontFamily: "system-ui" }}>
+            <h1>Error {error.status}</h1>
+            <p>{error.statusText}</p>
+            <p>Something went wrong. Please try refreshing the page.</p>
+          </div>
           <Scripts />
         </body>
       </html>
@@ -77,8 +72,7 @@ export function ErrorBoundary() {
         <Meta />
         <Links />
       </head>
-      <body>
-        <AppProvider i18n={{}}>
+              <body>
           <div style={{ padding: "20px", fontFamily: "system-ui" }}>
             <h1>Application Error</h1>
             <p>Something went wrong. Please try refreshing the page.</p>
@@ -88,9 +82,8 @@ export function ErrorBoundary() {
               </pre>
             )}
           </div>
-        </AppProvider>
-        <Scripts />
-      </body>
+          <Scripts />
+        </body>
     </html>
   );
 }

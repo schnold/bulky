@@ -8,6 +8,8 @@ import {
   isRouteErrorResponse,
 } from "@remix-run/react";
 import { AppProvider } from "@shopify/polaris";
+
+// Import Polaris styles directly
 import "@shopify/polaris/build/esm/styles.css";
 
 export default function App() {

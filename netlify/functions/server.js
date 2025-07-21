@@ -1,15 +1,44 @@
 import { createRequestHandler } from "@netlify/remix-adapter";
 import * as build from "../../build/server/index.js";
 
-const remixHandler = createRequestHandler({
+// Custom request handler that fixes URL issues
+const createCustomRequestHandler = ({ build, mode }) => {
+  const baseHandler = createRequestHandler({ build, mode });
+  
+  return async (event, context) => {
+    // Ensure the event has all required URL properties
+    if (!event.rawUrl) {
+      const host = event.headers.host || 'b1-bulk-product-seo-enhancer.netlify.app';
+      const protocol = event.headers['x-forwarded-proto'] || 'https';
+      const path = event.path || '/';
+      const query = event.rawQuery ? `?${event.rawQuery}` : '';
+      event.rawUrl = `${protocol}://${host}${path}${query}`;
+    }
+    
+    // Ensure all URL-related properties are defined
+    event.path = event.path || '/';
+    event.rawQuery = event.rawQuery || '';
+    event.queryStringParameters = event.queryStringParameters || {};
+    event.multiValueQueryStringParameters = event.multiValueQueryStringParameters || {};
+    
+    // Log the final event properties
+    console.log('Processed event URL properties:', {
+      rawUrl: event.rawUrl,
+      path: event.path,
+      rawQuery: event.rawQuery,
+      httpMethod: event.httpMethod
+    });
+    
+    return baseHandler(event, context);
+  };
+};
+
+const remixHandler = createCustomRequestHandler({
   build,
   mode: process.env.NODE_ENV,
 });
 
 export const handler = async (event, context) => {
-  // Debug logging
-  console.log('Netlify event:', JSON.stringify(event, null, 2));
-  
   // Set environment variables that might be missing in Netlify runtime
   if (!process.env.SHOPIFY_APP_URL) {
     process.env.SHOPIFY_APP_URL = 'https://b1-bulk-product-seo-enhancer.netlify.app';
@@ -23,26 +52,6 @@ export const handler = async (event, context) => {
   // Log environment variables for debugging
   console.log('SHOPIFY_APP_URL:', process.env.SHOPIFY_APP_URL);
   console.log('NODE_ENV:', process.env.NODE_ENV);
-
-  // Ensure we have a valid URL and construct it properly if needed
-  if (!event.rawUrl && !event.path) {
-    console.error('No URL found in event');
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'No URL provided' })
-    };
-  }
-
-  // Fix for Netlify adapter URL construction issue
-  if (!event.rawUrl && event.path) {
-    const host = event.headers.host || 'b1-bulk-product-seo-enhancer.netlify.app';
-    const protocol = event.headers['x-forwarded-proto'] || 'https';
-    const query = event.rawQuery ? `?${event.rawQuery}` : '';
-    event.rawUrl = `${protocol}://${host}${event.path}${query}`;
-    console.log('Constructed rawUrl:', event.rawUrl);
-  }
-
-  console.log('Final event.rawUrl:', event.rawUrl);
 
   try {
     return await remixHandler(event, context);
@@ -60,7 +69,7 @@ export const handler = async (event, context) => {
       rawUrl: event.rawUrl,
       path: event.path,
       httpMethod: event.httpMethod,
-      headers: event.headers
+      headers: event.headers ? Object.keys(event.headers) : 'no headers'
     });
     
     return {

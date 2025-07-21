@@ -3,7 +3,7 @@
 client_id = "fa9d90437a467b7215e296d9eb003d7d"
 name = "b1: Bulk Product SEO Optimizer"
 handle = "b1-bulk-product-seo-optimizer"
-application_url = "https://graduate-columns-correlation-electronics.trycloudflare.com"
+application_url = "https://b1-bulk-product-seo-enhancer.netlify.app"
 # For local development, you'll need to use ngrok or update this to your local tunnel URL
 embedded = true
 
@@ -34,7 +34,7 @@ api_version = "2025-07"
 scopes = "write_products"
 
 [auth]
-redirect_urls = ["https://graduate-columns-correlation-electronics.trycloudflare.com/auth/callback", "https://graduate-columns-correlation-electronics.trycloudflare.com/auth/shopify/callback", "https://graduate-columns-correlation-electronics.trycloudflare.com/api/auth/callback"]
+redirect_urls = ["https://b1-bulk-product-seo-enhancer.netlify.app/auth/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/auth/shopify/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/api/auth/callback"]
 
 [pos]
 embedded = false

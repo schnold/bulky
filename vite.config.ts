@@ -19,8 +19,20 @@ if (
   delete process.env.HOST;
 }
 
-const host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost:3000")
-  .hostname;
+// Ensure SHOPIFY_APP_URL is always set to prevent undefined URL issues
+if (!process.env.SHOPIFY_APP_URL || process.env.SHOPIFY_APP_URL === 'undefined') {
+  process.env.SHOPIFY_APP_URL = "https://b1-bulk-product-seo-enhancer.netlify.app";
+  console.warn('SHOPIFY_APP_URL not set or undefined, using fallback:', process.env.SHOPIFY_APP_URL);
+}
+
+let host: string;
+try {
+  host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost:3000").hostname;
+} catch (error) {
+  console.error('Invalid SHOPIFY_APP_URL, using localhost:', error);
+  host = "localhost";
+  process.env.SHOPIFY_APP_URL = "http://localhost:3000";
+}
 
 let hmrConfig;
 if (host === "localhost") {
@@ -84,7 +96,6 @@ export default defineConfig({
       "@shopify/app-bridge-react", 
       "@shopify/polaris",
       "@shopify/shopify-api",
-      "@shopify/shopify-app-remix",
       "@shopify/storefront-api-client"
     ],
   },
@@ -103,5 +114,10 @@ export default defineConfig({
     postcss: {
       plugins: [],
     },
+  },
+  define: {
+    // Ensure environment variables are available at build time
+    'process.env.SHOPIFY_APP_URL': JSON.stringify(process.env.SHOPIFY_APP_URL),
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
   },
 }) satisfies UserConfig;

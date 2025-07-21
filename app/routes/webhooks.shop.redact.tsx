@@ -7,6 +7,11 @@ interface ShopRedactPayload {
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  // Only accept POST requests for webhooks
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+
   try {
     // Verify HMAC signature - throws 401 if invalid
     const body = await verifyWebhookOrThrow(request);
@@ -51,3 +56,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return new Response("Error processing shop redact webhook", { status: 500 });
   }
 };
+
+// Only allow POST requests for webhooks
+export async function loader() {
+  return new Response("Method Not Allowed", { status: 405 });
+}

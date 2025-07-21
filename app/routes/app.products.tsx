@@ -523,6 +523,30 @@ export default function Products() {
     setAdvancedContext(prev => ({ ...prev, [field]: value }));
   }, []);
 
+  // Add cancel optimization function
+  const handleCancelOptimization = useCallback(() => {
+    // Reset all optimization states
+    setOptimizationQueue([]);
+    setCurrentOptimizingProduct(null);
+    setOptimizingProducts(new Set());
+    setCompletedProducts(new Set());
+    setFailedProducts(new Set());
+    setBulkOptimizationProgress({
+      current: 0,
+      total: 0,
+      currentProductTitle: "",
+      isActive: false,
+      completed: 0,
+      failed: 0
+    });
+    setSelectedItems([]);
+    
+    // Show cancellation message
+    setToastMessage("Optimization cancelled");
+    setToastError(false);
+    setShowToast(true);
+  }, []);
+
   // Handle optimization results
   const { data: fetcherData, state: fetcherState } = optimizeFetcher;
 
@@ -554,7 +578,7 @@ export default function Products() {
         optimizeFetcher.submit(
           {
             intent: "optimize",
-            productIds: JSON.stringify([nextProductId]),
+            productIds: JSON.stringify([nextProductId]), // Send only one product at a time
             context: JSON.stringify(contextWithInstructions),
           },
           {
@@ -564,7 +588,7 @@ export default function Products() {
         );
       }
     }
-  }, [optimizationQueue, fetcherState, currentOptimizingProduct, products, optimizeFetcher, advancedContext]);
+  }, [optimizationQueue, fetcherState, currentOptimizingProduct, products, optimizeFetcher, advancedContext, specialInstructions]);
 
 
 
@@ -671,6 +695,36 @@ export default function Products() {
       }
     }
   }, [fetcherState, bulkOptimizationProgress.isActive, fetcherData, currentOptimizingProduct, optimizationQueue.length]);
+
+  // Add timeout protection for stuck optimizations
+  useEffect(() => {
+    if (currentOptimizingProduct && fetcherState === "submitting") {
+      const timeout = setTimeout(() => {
+        if (fetcherState === "submitting") {
+          console.warn(`⚠️ Optimization timeout for product: ${currentOptimizingProduct}`);
+          // Force reset the fetcher state by triggering an error handling
+          setFailedProducts(prev => new Set([...prev, currentOptimizingProduct]));
+          setBulkOptimizationProgress(prev => ({
+            ...prev,
+            failed: prev.failed + 1
+          }));
+          setOptimizingProducts(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(currentOptimizingProduct);
+            return newSet;
+          });
+          setCurrentOptimizingProduct(null);
+          
+          // Show timeout error
+          setToastMessage(`Optimization timed out for some products. Please try again.`);
+          setToastError(true);
+          setShowToast(true);
+        }
+      }, 120000); // 2 minute timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [currentOptimizingProduct, fetcherState]);
 
   const filters = [
     {
@@ -895,7 +949,7 @@ export default function Products() {
                     </Text>
                   </InlineStack>
 
-                  {/* Queue Status */}
+                  {/* Queue Status and Cancel Button */}
                   <InlineStack gap="300">
                     {bulkOptimizationProgress.completed > 0 && (
                       <InlineStack gap="100" align="center">
@@ -935,6 +989,18 @@ export default function Products() {
                           {optimizationQueue.length} in queue
                         </Text>
                       </InlineStack>
+                    )}
+                    
+                    {/* Cancel Button */}
+                    {bulkOptimizationProgress.current < bulkOptimizationProgress.total && (
+                      <Button
+                        variant="tertiary"
+                        tone="critical"
+                        size="slim"
+                        onClick={handleCancelOptimization}
+                      >
+                        Cancel
+                      </Button>
                     )}
                   </InlineStack>
                 </InlineStack>

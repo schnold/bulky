@@ -9,6 +9,10 @@
 
 [functions]
   directory = "netlify/functions"
+  # Increase timeout for optimization functions
+  timeout = 60
+  # Set memory limit for better performance
+  memory = 1024
 
 # Correct MIME types for assets
 [[headers]]

@@ -129,43 +129,69 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
   console.log(prompt);
   console.log("=== END PROMPT ===");
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPEN_ROUTER_API_KEY}`,
-      "HTTP-Referer": "https://shopify-product-optimizer.com", // For OpenRouter rankings
-      "X-Title": "Shopify Product SEO Optimizer", // For OpenRouter rankings
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "deepseek/deepseek-chat-v3-0324:free",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert e-commerce SEO specialist with deep knowledge of 2025 best practices, Shopify optimization, and conversion rate optimization. You specialize in creating compelling product content that ranks well in search engines and converts visitors into customers."
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      max_tokens: 1500,
-      temperature: 0.7,
-    }),
-  });
+  // Create an abort controller for timeout protection
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.warn("⚠️ OpenRouter API call timed out after 45 seconds");
+    controller.abort();
+  }, 45000); // 45 second timeout
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("OpenRouter API error:", response.status, errorText);
-    throw new Error(`OpenRouter API error (${response.status}): ${response.statusText}`);
-  }
+  let response, data, content;
+  
+  try {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPEN_ROUTER_API_KEY}`,
+        "HTTP-Referer": "https://shopify-product-optimizer.com", // For OpenRouter rankings
+        "X-Title": "Shopify Product SEO Optimizer", // For OpenRouter rankings
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "deepseek/deepseek-chat-v3-0324:free",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert e-commerce SEO specialist with deep knowledge of 2025 best practices, Shopify optimization, and conversion rate optimization. You specialize in creating compelling product content that ranks well in search engines and converts visitors into customers."
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        max_tokens: 1500,
+        temperature: 0.7,
+      }),
+      signal: controller.signal, // Add abort signal for timeout
+    });
 
-  const data = await response.json();
-  const content = data.choices[0]?.message?.content;
+    // Clear the timeout if request completes
+    clearTimeout(timeoutId);
 
-  if (!content) {
-    console.error("OpenRouter response:", data);
-    throw new Error("No content received from AI");
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenRouter API error:", response.status, errorText);
+      throw new Error(`OpenRouter API error (${response.status}): ${response.statusText}`);
+    }
+
+    data = await response.json();
+    content = data.choices[0]?.message?.content;
+
+    if (!content) {
+      console.error("OpenRouter response:", data);
+      throw new Error("No content received from AI");
+    }
+  } catch (error) {
+    // Clear timeout and handle fetch errors (including aborts)
+    clearTimeout(timeoutId);
+    
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error("OpenRouter API call was aborted due to timeout");
+      throw new Error("AI optimization timed out. Please try again.");
+    }
+    
+    console.error("OpenRouter fetch error:", error);
+    throw error; // Re-throw other errors
   }
 
   try {
@@ -235,13 +261,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     for (let i = 0; i < productIds.length; i++) {
       const productId = productIds[i];
       console.log(`📦 Optimizing product ${i + 1}/${productIds.length}: ${productId}`);
+      console.log(`⏰ Start time: ${new Date().toISOString()}`);
 
       try {
         // Use serverless-compatible GraphQL client
         const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
-        const adminClient = createServerlessAdminClient(session.shop, session.accessToken);
+        const adminClient = createServerlessAdminClient(session.shop, session.accessToken!);
 
         // First, get the current product data
+        console.log(`📋 Fetching product data for: ${productId}`);
         const productResponse = await adminClient.graphql(
           `query getProduct($id: ID!) {
             product(id: $id) {
@@ -261,19 +289,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const product = productData.data?.product;
 
         if (!product) {
+          console.error(`❌ Product not found: ${productId}`);
           results.push({ productId, success: false, error: "Product not found" });
           continue;
         }
 
         // Optimize with AI
         console.log(`🤖 Calling OpenRouter AI for product: ${product.title}`);
+        const aiStartTime = Date.now();
         const optimizedData = await optimizeProductWithAI({
           ...product,
           tags: product.tags || [],
           // Map descriptionHtml to description for the AI function
           description: product.descriptionHtml || "",
         } as any, optimizationContext);
-        console.log(`✅ AI optimization complete for: ${product.title}`);
+        const aiDuration = Date.now() - aiStartTime;
+        console.log(`✅ AI optimization complete for: ${product.title} (took ${aiDuration}ms)`);
 
         // Update the product using correct Shopify ProductUpdate mutation
         console.log("💾 Updating product with optimized data:", {
@@ -285,6 +316,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           tags: optimizedData.tags,
         });
 
+        const updateStartTime = Date.now();
         const updateResponse = await adminClient.graphql(
           `mutation updateProduct($product: ProductUpdateInput!) {
             productUpdate(product: $product) {
@@ -318,7 +350,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
 
         const updateData = await updateResponse.json();
-        console.log("📋 Shopify update response:", JSON.stringify(updateData, null, 2));
+        const updateDuration = Date.now() - updateStartTime;
+        console.log(`📋 Shopify update complete (took ${updateDuration}ms):`, JSON.stringify(updateData, null, 2));
 
         const userErrors = updateData.data?.productUpdate?.userErrors;
         const updatedProduct = updateData.data?.productUpdate?.product;
@@ -350,13 +383,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           });
         }
 
-        // Small delay between API calls to respect rate limits
-        if (i < productIds.length - 1) {
-          console.log("⏱️ Waiting 1 second before next optimization...");
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+        // Remove delay since we're processing one at a time now
+        // No delay needed between API calls when processing single products
+        console.log(`⏰ Total processing time: ${Date.now() - (aiStartTime - aiDuration)}ms`);
       } catch (error) {
         console.error(`❌ Error optimizing product ${productId}:`, error);
+        console.error(`❌ Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
         results.push({
           productId,
           success: false,

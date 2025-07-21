@@ -31,90 +31,85 @@ function validateEnvironment() {
 // Validate environment at startup
 validateEnvironment();
 
-// Custom request handler that fixes URL issues
-const createCustomRequestHandler = ({ build, mode }) => {
-  const baseHandler = createRequestHandler({ build, mode });
-  
-  return async (event, context) => {
-    try {
-      // Validate the incoming event
-      if (!event) {
-        throw new Error('Event object is undefined');
-      }
-      
-      const host = event.headers?.host || 'b1-bulk-product-seo-enhancer.netlify.app';
-      const protocol = event.headers?.['x-forwarded-proto'] || 'https';
-      const path = event.path || '/';
-      const query = event.rawQuery ? `?${event.rawQuery}` : '';
-      
-      // Construct the full URL if rawUrl is missing or undefined
-      const constructedUrl = `${protocol}://${host}${path}${query}`;
-      
-      // Ensure rawUrl is always defined
-      if (!event.rawUrl || event.rawUrl === 'undefined' || event.rawUrl === 'null') {
-        event.rawUrl = constructedUrl;
-      }
-      
-      // Ensure all URL-related properties are defined and valid
-      event.path = path;
-      event.rawQuery = event.rawQuery || '';
-      event.queryStringParameters = event.queryStringParameters || {};
-      event.multiValueQueryStringParameters = event.multiValueQueryStringParameters || {};
-      event.headers = event.headers || {};
-      
-      // Ensure httpMethod is set
-      event.httpMethod = event.httpMethod || 'GET';
-      
-      // Log the processed event properties for debugging
-      console.log('Processed event URL properties:', {
-        rawUrl: event.rawUrl,
-        path: event.path,
-        rawQuery: event.rawQuery,
-        httpMethod: event.httpMethod,
-        host: host,
-        protocol: protocol
-      });
-      
-      // Validate that rawUrl is a proper URL before proceeding
-      try {
-        new URL(event.rawUrl);
-      } catch (urlError) {
-        console.error('Invalid URL detected, using fallback:', event.rawUrl, 'Error:', urlError);
-        event.rawUrl = constructedUrl;
-        console.log('Using fallback URL:', event.rawUrl);
-        
-        // Test the fallback URL too
-        try {
-          new URL(event.rawUrl);
-        } catch (fallbackError) {
-          console.error('Even fallback URL is invalid:', event.rawUrl, 'Error:', fallbackError);
-          // Use a hardcoded fallback as last resort
-          event.rawUrl = 'https://b1-bulk-product-seo-enhancer.netlify.app/';
-          console.log('Using hardcoded fallback URL:', event.rawUrl);
-        }
-      }
-      
-      return await baseHandler(event, context);
-    } catch (error) {
-      console.error('Error in custom request handler:', error);
-      return {
-        statusCode: 500,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          error: 'Internal server error',
-          message: error.message,
-          timestamp: new Date().toISOString()
-        })
-      };
-    }
-  };
-};
+// Function to completely sanitize and reconstruct the event object
+function sanitizeEvent(event) {
+  if (!event) {
+    console.error('Event object is null or undefined');
+    throw new Error('Event object is required');
+  }
 
-const remixHandler = createCustomRequestHandler({
-  build,
-  mode: process.env.NODE_ENV,
+  // Extract headers safely
+  const headers = event.headers || {};
+  const host = headers.host || headers.Host || 'b1-bulk-product-seo-enhancer.netlify.app';
+  const protocol = headers['x-forwarded-proto'] || headers['X-Forwarded-Proto'] || 'https';
+  
+  // Extract path safely
+  const path = event.path || event.rawUrl?.split('?')[0] || '/';
+  
+  // Extract query safely
+  const rawQuery = event.rawQuery || event.queryStringParameters ? 
+    new URLSearchParams(event.queryStringParameters || {}).toString() : '';
+  
+  // Construct the full URL
+  const query = rawQuery ? `?${rawQuery}` : '';
+  const fullUrl = `${protocol}://${host}${path}${query}`;
+  
+  // Validate the constructed URL
+  try {
+    new URL(fullUrl);
+  } catch (urlError) {
+    console.error('Constructed URL is invalid:', fullUrl, 'Error:', urlError);
+    // Use a hardcoded fallback if construction fails
+    const fallbackUrl = 'https://b1-bulk-product-seo-enhancer.netlify.app/';
+    console.log('Using hardcoded fallback URL:', fallbackUrl);
+    return {
+      ...event,
+      rawUrl: fallbackUrl,
+      path: '/',
+      rawQuery: '',
+      queryStringParameters: {},
+      multiValueQueryStringParameters: {},
+      headers: {
+        ...headers,
+        host: 'b1-bulk-product-seo-enhancer.netlify.app'
+      },
+      httpMethod: event.httpMethod || 'GET'
+    };
+  }
+
+  // Return sanitized event object
+  const sanitizedEvent = {
+    ...event,
+    rawUrl: fullUrl,
+    path: path,
+    rawQuery: rawQuery,
+    queryStringParameters: event.queryStringParameters || {},
+    multiValueQueryStringParameters: event.multiValueQueryStringParameters || {},
+    headers: {
+      ...headers,
+      host: host
+    },
+    httpMethod: event.httpMethod || 'GET',
+    isBase64Encoded: event.isBase64Encoded || false,
+    body: event.body || null
+  };
+
+  console.log('Sanitized event URL properties:', {
+    rawUrl: sanitizedEvent.rawUrl,
+    path: sanitizedEvent.path,
+    rawQuery: sanitizedEvent.rawQuery,
+    httpMethod: sanitizedEvent.httpMethod,
+    host: host,
+    protocol: protocol
+  });
+
+  return sanitizedEvent;
+}
+
+// Create the base Remix handler
+const baseRemixHandler = createRequestHandler({ 
+  build, 
+  mode: process.env.NODE_ENV 
 });
 
 export const handler = async (event, context) => {
@@ -128,7 +123,12 @@ export const handler = async (event, context) => {
       process.env.NODE_ENV = 'production';
     }
 
-    return await remixHandler(event, context);
+    // Sanitize the event object before passing to Remix
+    const sanitizedEvent = sanitizeEvent(event);
+    
+    // Call the base Remix handler with the sanitized event
+    return await baseRemixHandler(sanitizedEvent, context);
+    
   } catch (error) {
     console.error('Handler error:', error);
     console.error('Error details:', {

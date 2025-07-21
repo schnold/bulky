@@ -256,7 +256,7 @@ export async function sendContactFormEmail(data: ContactFormData): Promise<boole
  *    - Create a new API key
  * 
  * 3. Set environment variables in your .env file:
- *    RESEND_API_KEY=re_iMXf5mRv_JbgtRAaZPkUaZ156mAAKXKJ3 ✅ DONE
+ *    RESEND_API_KEY=your_actual_api_key_here ✅ DONE
  *    SUPPORT_EMAIL=your-actual-email@gmail.com (where you want to receive inquiries)
  *    FROM_EMAIL=support@resend.dev (optional - uses Resend's default domain)
  * 

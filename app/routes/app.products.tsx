@@ -128,12 +128,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Get subscription data
     const subscription = user?.subscriptions?.[0] || null;
 
-    const requestUrl = request.url || 'https://b1-bulk-product-seo-enhancer.netlify.app/';
-    if (!request.url) {
-        console.warn('request.url is undefined in app.products loader, using fallback');
-    }
-    
-    const url = new URL(requestUrl);
+    const url = new URL(request.url);
     const query = url.searchParams.get("query") || "";
     const status = url.searchParams.get("status") || "";
     const productType = url.searchParams.get("productType") || "";

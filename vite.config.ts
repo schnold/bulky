@@ -3,6 +3,7 @@ import { installGlobals } from "@remix-run/node";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { netlifyPlugin } from "@netlify/remix-adapter/plugin";
+import path from "path";
 
 installGlobals({ nativeFetch: true });
 
@@ -38,7 +39,12 @@ if (host === "localhost") {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command, mode }) => ({
+  resolve: {
+    alias: {
+      "~": path.resolve(__dirname, "app"),
+    },
+  },
   server: {
     allowedHosts: [host],
     cors: {
@@ -65,6 +71,7 @@ export default defineConfig({
       serverBuildFile: "index.js",
       buildDirectory: "build",
       ssr: true,
+      serverModuleFormat: "esm",
     }),
     tsconfigPaths(),
     netlifyPlugin(),
@@ -76,11 +83,7 @@ export default defineConfig({
     include: ["@shopify/app-bridge-react", "@shopify/polaris"],
   },
   ssr: {
-    noExternal: (id) => {
-      // Bundle all @shopify packages and their dependencies
-      if (typeof id !== "string") return false;
-      return id.includes("@shopify/") || id.includes("shopify");
-    },
+    noExternal: ["@shopify/app-bridge-react", "@shopify/polaris", "@shopify/shopify-app-remix"],
     external: ["react", "react-dom"],
   },
   css: {
@@ -88,4 +91,4 @@ export default defineConfig({
       plugins: [],
     },
   },
-}) satisfies UserConfig;
+})) satisfies UserConfig;

@@ -39,7 +39,7 @@ if (host === "localhost") {
   };
 }
 
-export default defineConfig(({ command, mode }) => ({
+export default defineConfig({
   resolve: {
     alias: {
       "~": path.resolve(__dirname, "app"),
@@ -104,4 +104,4 @@ export default defineConfig(({ command, mode }) => ({
       plugins: [],
     },
   },
-})) satisfies UserConfig;
+}) satisfies UserConfig;

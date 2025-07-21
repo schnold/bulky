@@ -76,7 +76,14 @@ export default defineConfig({
     include: ["@shopify/app-bridge-react", "@shopify/polaris"],
   },
   ssr: {
-    noExternal: ["@shopify/polaris", "@shopify/app-bridge-react", "@shopify/shopify-app-remix"],
+    noExternal: [
+      "@shopify/polaris", 
+      "@shopify/app-bridge-react", 
+      "@shopify/shopify-app-remix", 
+      "@shopify/shopify-api",
+      "@shopify/shopify-app-session-storage-prisma",
+      "@shopify/api-codegen-preset"
+    ],
     external: ["react", "react-dom"],
   },
   css: {

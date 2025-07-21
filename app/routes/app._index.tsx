@@ -150,8 +150,7 @@ export default function Index() {
       setToastError(false);
       setShowToast(true);
       setNewKeyword(""); // Clear input on success
-      // Reload page to get fresh data
-      window.location.reload();
+      // Remix will automatically revalidate the loader data after successful action
     } else if (fetcher.data && 'error' in fetcher.data) {
       setToastMessage(fetcher.data.error);
       setToastError(true);

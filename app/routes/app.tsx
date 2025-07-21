@@ -12,7 +12,13 @@ import { authenticate } from "../shopify.server";
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+
+  // Ensure user exists for this session
+  if (session?.shop) {
+    const { ensureUserExists } = await import("../utils/db.server");
+    await ensureUserExists(session.shop);
+  }
 
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
 };

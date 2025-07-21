@@ -9,6 +9,43 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
+// Create a logging wrapper for session storage to debug issues
+class LoggingPrismaSessionStorage extends PrismaSessionStorage<typeof prisma> {
+  async storeSession(session: any): Promise<boolean> {
+    console.log(`🔐 Storing session for shop: ${session.shop}`, {
+      id: session.id,
+      shop: session.shop,
+      accessToken: session.accessToken ? 'SET' : 'NOT SET',
+      isOnline: session.isOnline
+    });
+    return super.storeSession(session);
+  }
+
+  async loadSession(id: string): Promise<any> {
+    console.log(`🔍 Loading session with ID: ${id}`);
+    try {
+      const session = await super.loadSession(id);
+      console.log(`🔍 Loaded session:`, session ? {
+        id: session.id,
+        shop: session.shop,
+        accessToken: session.accessToken ? `SET (${session.accessToken?.substring(0, 8)}...)` : 'NOT SET',
+        isOnline: session.isOnline,
+        expires: session.expires,
+        state: session.state
+      } : 'NOT FOUND');
+      return session;
+    } catch (error) {
+      console.error(`❌ Error loading session ${id}:`, error);
+      return null;
+    }
+  }
+
+  async deleteSession(id: string): Promise<boolean> {
+    console.log(`🗑️ Deleting session with ID: ${id}`);
+    return super.deleteSession(id);
+  }
+}
+
 // Ensure we have a valid app URL
 const getAppUrl = () => {
   const url = process.env.SHOPIFY_APP_URL;
@@ -31,7 +68,7 @@ const shopify = shopifyApp({
   scopes: process.env.SCOPES?.split(","),
   appUrl: getAppUrl(),
   authPathPrefix: "/auth",
-  sessionStorage: new PrismaSessionStorage(prisma),
+  sessionStorage: new LoggingPrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
   billing: {
     [STARTER_PLAN]: {

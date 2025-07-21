@@ -37,8 +37,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   console.log(`🔍 LOADER - Session shop: ${session.shop}`);
 
   // Get user data from database (user is guaranteed to exist from app.tsx loader)
-  const { ensureUserAndSession } = await import("../utils/session.server");
-  const user = await ensureUserAndSession(session.shop, true); // Include keywords
+  const { ensureUserExists } = await import("../utils/db.server");
+  const user = await ensureUserExists(session.shop, true); // Include keywords
 
   console.log(`🔍 LOADER - User found:`, {
     id: user.id,
@@ -63,8 +63,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const intent = formData.get("intent");
 
     // Ensure user exists before any operations
-    const { ensureUserAndSession } = await import("../utils/session.server");
-    const user = await ensureUserAndSession(session.shop);
+    const { ensureUserExists } = await import("../utils/db.server");
+    const user = await ensureUserExists(session.shop);
 
     if (!user) {
       return json({ error: "Failed to create or find user" }, { status: 500 });

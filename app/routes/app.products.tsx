@@ -32,6 +32,7 @@ import { MagicIcon, CheckIcon, CreditCardIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ClientOnly } from "../components/ClientOnly";
+import prisma from "../db.server";
 
 interface Product {
   id: string;
@@ -89,21 +90,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   try {
+    const requestUrl = new URL(request.url);
     console.log(`🔍 Products loader - Request URL: ${request.url}`);
+    console.log(`🔍 Products loader - URL Analysis:`, {
+      pathname: requestUrl.pathname,
+      search: requestUrl.search,
+      searchParams: Object.fromEntries(requestUrl.searchParams.entries()),
+      isDataRequest: requestUrl.searchParams.has('_data')
+    });
+    
+    console.log(`🔍 Products loader - Request headers:`, {
+      'user-agent': request.headers.get('user-agent'),
+      'cookie': request.headers.get('cookie') ? 'SET' : 'NOT SET',
+      'authorization': request.headers.get('authorization') ? 'SET' : 'NOT SET',
+      'x-shopify-shop-domain': request.headers.get('x-shopify-shop-domain'),
+      'x-shopify-hmac': request.headers.get('x-shopify-hmac') ? 'SET' : 'NOT SET',
+      'referer': request.headers.get('referer'),
+    });
+
     console.log(`🔍 Products loader - Environment check:`, {
       NODE_ENV: process.env.NODE_ENV,
       SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
       SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET',
       SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET',
-    });
-
-    // Validate required environment variables
-    console.log(`🔍 Products loader - Environment variables check:`, {
-      SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
-      SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET',
-      SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET',
-      SCOPES: process.env.SCOPES ? 'SET' : 'NOT SET',
-      NODE_ENV: process.env.NODE_ENV || 'NOT SET',
     });
     
     if (!process.env.SHOPIFY_API_KEY || !process.env.SHOPIFY_API_SECRET) {
@@ -111,13 +120,54 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       throw new Error("Missing required Shopify environment variables");
     }
 
-    const { admin, session } = await authenticate.admin(request);
+    // Test database connection before authentication
+    console.log(`🔍 Products loader - Testing database connection...`);
+    try {
+      const sessionCount = await prisma.session.count();
+      console.log(`✅ Products loader - Database connected, session count: ${sessionCount}`);
+    } catch (dbError) {
+      console.error(`❌ Products loader - Database connection failed:`, dbError);
+    }
+
+    console.log(`🔍 Products loader - About to authenticate admin request...`);
+    let admin, session;
+    
+    try {
+      const authResult = await authenticate.admin(request);
+      admin = authResult.admin;
+      session = authResult.session;
+      console.log(`✅ Products loader - Authentication result:`, {
+        hasAdmin: !!admin,
+        hasSession: !!session,
+        sessionShop: session?.shop,
+        sessionId: session?.id
+      });
+    } catch (authError) {
+      console.error(`❌ Products loader - Authentication failed:`, {
+        error: authError,
+        message: authError instanceof Error ? authError.message : 'Unknown error',
+        stack: authError instanceof Error ? authError.stack : 'No stack'
+      });
+      throw authError;
+    }
 
     if (!session || !session.shop) {
+      console.error(`❌ Products loader - Invalid session after authentication:`, {
+        session: session ? 'EXISTS_BUT_INVALID' : 'NULL',
+        shop: session?.shop || 'NO_SHOP'
+      });
       throw new Error("No valid session found");
     }
 
     console.log(`✅ Products loader - Authentication successful for shop: ${session.shop}`);
+    console.log(`🔍 Products loader - Session details:`, {
+      id: session.id,
+      shop: session.shop,
+      state: session.state,
+      isOnline: session.isOnline,
+      accessToken: session.accessToken ? 'SET' : 'NOT SET',
+      scope: session.scope
+    });
 
     // Get user data from database (user is guaranteed to exist from app.tsx loader)
     const { ensureUserExists } = await import("../utils/db.server");
@@ -199,7 +249,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       }
     );
 
-    const responseJson = await response.json();
+    if (!response.ok) {
+      console.error(`❌ GraphQL response not ok:`, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      
+      const errorText = await response.text();
+      console.error(`❌ GraphQL error response:`, errorText);
+      
+      throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const responseJson = await response.json() as any;
+    
+    if (responseJson.errors) {
+      console.error(`❌ GraphQL errors:`, responseJson.errors);
+      throw new Error(`GraphQL errors: ${JSON.stringify(responseJson.errors)}`);
+    }
     const data = responseJson.data?.products;
 
     const products: Product[] = data?.edges?.map((edge: any) => edge.node) || [];

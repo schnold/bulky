@@ -9,10 +9,12 @@
 
 [functions]
   directory = "netlify/functions"
-  # Increase timeout to maximum allowed
-  timeout = 300
-  # Set memory limit for better performance
-  memory = 3008
+
+[functions.timeout]
+  seconds = 300
+
+[functions.memory]
+  mb = 3008
 
 
 

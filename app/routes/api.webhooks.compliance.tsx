@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { verifyWebhookOrThrow } from "~/utils/webhook-verification.server";
+import { verifyWebhookOrThrow } from "../utils/webhook-verification.server";
 
 export async function action({ request }: ActionFunctionArgs) {
   try {

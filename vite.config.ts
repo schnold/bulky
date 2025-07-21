@@ -71,7 +71,7 @@ export default defineConfig(({ command, mode }) => ({
       serverBuildFile: "index.js",
       buildDirectory: "build",
       ssr: true,
-      serverModuleFormat: "esm",
+      serverModuleFormat: "cjs",
     }),
     tsconfigPaths(),
     netlifyPlugin(),
@@ -80,10 +80,21 @@ export default defineConfig(({ command, mode }) => ({
     assetsInlineLimit: 0,
   },
   optimizeDeps: {
-    include: ["@shopify/app-bridge-react", "@shopify/polaris"],
+    include: [
+      "@shopify/app-bridge-react", 
+      "@shopify/polaris",
+      "@shopify/shopify-api",
+      "@shopify/shopify-app-remix"
+    ],
   },
   ssr: {
-    noExternal: ["@shopify/app-bridge-react", "@shopify/polaris", "@shopify/shopify-app-remix"],
+    noExternal: [
+      "@shopify/app-bridge-react", 
+      "@shopify/polaris", 
+      "@shopify/shopify-app-remix",
+      "@shopify/shopify-api",
+      "@shopify/shopify-app-session-storage-prisma"
+    ],
     external: ["react", "react-dom"],
   },
   css: {

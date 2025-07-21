@@ -78,6 +78,7 @@ export default defineConfig({
   ssr: {
     noExternal: (id) => {
       // Bundle all @shopify packages and their dependencies
+      if (typeof id !== "string") return false;
       return id.includes("@shopify/") || id.includes("shopify");
     },
     external: ["react", "react-dom"],

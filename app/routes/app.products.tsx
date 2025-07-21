@@ -32,6 +32,7 @@ import { MagicIcon, CheckIcon, CreditCardIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ClientOnly } from "../components/ClientOnly";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import prisma from "../db.server";
 
 interface Product {
@@ -658,40 +659,58 @@ export default function Products() {
 
   // Handle fetch state changes and errors
   useEffect(() => {
-    if (fetcherState === "idle" && bulkOptimizationProgress.isActive && currentOptimizingProduct && !(fetcherData as any)?.results) {
-      // Handle case where fetch fails or returns no results
-      setFailedProducts(prev => new Set([...prev, currentOptimizingProduct]));
-      setBulkOptimizationProgress(prev => ({
-        ...prev,
-        failed: prev.failed + 1
-      }));
-      setOptimizingProducts(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(currentOptimizingProduct);
-        return newSet;
-      });
-      setCurrentOptimizingProduct(null);
+    if (fetcherState === "idle" && bulkOptimizationProgress.isActive && currentOptimizingProduct) {
+      const fetcherError = (optimizeFetcher as any)?.data?.error;
+      const results = (fetcherData as any)?.results;
+      
+      // Check for specific error conditions
+      if (fetcherError || (!results && fetcherData && typeof fetcherData === 'object' && 'error' in fetcherData)) {
+        console.warn(`⚠️ Optimization failed for product: ${currentOptimizingProduct}`, fetcherError || fetcherData);
+        
+        // Handle the failed product
+        setFailedProducts(prev => new Set([...prev, currentOptimizingProduct]));
+        setBulkOptimizationProgress(prev => ({
+          ...prev,
+          failed: prev.failed + 1
+        }));
+        setOptimizingProducts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(currentOptimizingProduct);
+          return newSet;
+        });
+        setCurrentOptimizingProduct(null);
 
-      // Show error toast if this was the last product
-      if (optimizationQueue.length === 0) {
-        setToastMessage(`Optimization failed for some products`);
-        setToastError(true);
-        setShowToast(true);
+        // Show error toast if this was the last product
+        if (optimizationQueue.length === 0) {
+          const errorMessage = fetcherError?.includes('timeout') || fetcherError?.includes('504') 
+            ? 'Some optimizations timed out. This can happen with complex products. Try optimizing fewer products at once.'
+            : 'Optimization failed for some products. Please try again.';
+          
+          setToastMessage(errorMessage);
+          setToastError(true);
+          setShowToast(true);
 
-        setTimeout(() => {
-          setBulkOptimizationProgress({
-            current: 0,
-            total: 0,
-            currentProductTitle: "",
-            isActive: false,
-            completed: 0,
-            failed: 0
-          });
-          setOptimizingProducts(new Set());
-          setCompletedProducts(new Set());
-          setFailedProducts(new Set());
-          setSelectedItems([]);
-        }, 3000);
+          setTimeout(() => {
+            setBulkOptimizationProgress({
+              current: 0,
+              total: 0,
+              currentProductTitle: "",
+              isActive: false,
+              completed: 0,
+              failed: 0
+            });
+            setOptimizingProducts(new Set());
+            setCompletedProducts(new Set());
+            setFailedProducts(new Set());
+            setSelectedItems([]);
+          }, 3000);
+        }
+        return; // Exit early for error case
+      }
+      
+      // Handle successful case (existing logic)
+      if (!results) {
+        return; // Still processing or no data yet
       }
     }
   }, [fetcherState, bulkOptimizationProgress.isActive, fetcherData, currentOptimizingProduct, optimizationQueue.length]);
@@ -715,12 +734,12 @@ export default function Products() {
           });
           setCurrentOptimizingProduct(null);
           
-          // Show timeout error
-          setToastMessage(`Optimization timed out for some products. Please try again.`);
+          // Show timeout error with helpful message
+          setToastMessage(`Optimization timed out. Complex products may take longer - try reducing the number of products being optimized simultaneously.`);
           setToastError(true);
           setShowToast(true);
         }
-      }, 120000); // 2 minute timeout
+      }, 90000); // Reduced to 90 second timeout
 
       return () => clearTimeout(timeout);
     }
@@ -848,9 +867,10 @@ export default function Products() {
         <div>Loading...</div>
       </Page>
     }>
-      <Frame>
-        <Page>
-          <TitleBar title="Products" />
+      <ErrorBoundary>
+        <Frame>
+          <Page>
+            <TitleBar title="Products" />
 
 
 
@@ -886,6 +906,11 @@ export default function Products() {
                 <Text variant="bodySm" tone="subdued" as="p">
                   Select products using checkboxes to enable bulk optimization
                 </Text>
+                {selectedItems.length > 10 && (
+                  <Text variant="bodySm" tone="caution" as="p">
+                    💡 Tip: For best results, optimize 5-10 products at a time to avoid timeouts
+                  </Text>
+                )}
               </BlockStack>
             </InlineStack>
           </Box>
@@ -1429,6 +1454,7 @@ export default function Products() {
         </Modal>
         </Page>
       </Frame>
+      </ErrorBoundary>
     </ClientOnly>
   );
 }

@@ -31,90 +31,143 @@ function validateEnvironment() {
 // Validate environment at startup
 validateEnvironment();
 
-// Function to completely sanitize and reconstruct the event object
-function sanitizeEvent(event) {
-  if (!event) {
+// Create a completely clean event object that the Netlify adapter can safely use
+function createCleanEvent(originalEvent) {
+  if (!originalEvent) {
     console.error('Event object is null or undefined');
     throw new Error('Event object is required');
   }
 
   // Extract headers safely
-  const headers = event.headers || {};
+  const headers = originalEvent.headers || {};
   const host = headers.host || headers.Host || 'b1-bulk-product-seo-enhancer.netlify.app';
   const protocol = headers['x-forwarded-proto'] || headers['X-Forwarded-Proto'] || 'https';
+  const path = originalEvent.path || '/';
+  const method = originalEvent.httpMethod || 'GET';
   
-  // Extract path safely
-  const path = event.path || event.rawUrl?.split('?')[0] || '/';
+  // Handle query parameters
+  let queryString = '';
+  let queryStringParameters = {};
+  let multiValueQueryStringParameters = {};
   
-  // Extract query safely
-  const rawQuery = event.rawQuery || event.queryStringParameters ? 
-    new URLSearchParams(event.queryStringParameters || {}).toString() : '';
+  if (originalEvent.rawQuery) {
+    queryString = originalEvent.rawQuery;
+    // Parse rawQuery into queryStringParameters
+    const searchParams = new URLSearchParams(originalEvent.rawQuery);
+    for (const [key, value] of searchParams.entries()) {
+      queryStringParameters[key] = value;
+    }
+  } else if (originalEvent.queryStringParameters) {
+    queryStringParameters = originalEvent.queryStringParameters || {};
+    queryString = new URLSearchParams(queryStringParameters).toString();
+  }
+  
+  if (originalEvent.multiValueQueryStringParameters) {
+    multiValueQueryStringParameters = originalEvent.multiValueQueryStringParameters;
+  }
   
   // Construct the full URL
-  const query = rawQuery ? `?${rawQuery}` : '';
-  const fullUrl = `${protocol}://${host}${path}${query}`;
+  const fullUrl = `${protocol}://${host}${path}${queryString ? `?${queryString}` : ''}`;
   
-  // Validate the constructed URL
+  // Validate the URL
   try {
     new URL(fullUrl);
   } catch (urlError) {
     console.error('Constructed URL is invalid:', fullUrl, 'Error:', urlError);
-    // Use a hardcoded fallback if construction fails
+    // If we can't construct a valid URL, use the fallback
     const fallbackUrl = 'https://b1-bulk-product-seo-enhancer.netlify.app/';
-    console.log('Using hardcoded fallback URL:', fallbackUrl);
+    console.log('Using fallback URL:', fallbackUrl);
+    
     return {
-      ...event,
-      rawUrl: fallbackUrl,
-      path: '/',
-      rawQuery: '',
+      version: '2.0',
+      routeKey: '$default',
+      rawPath: '/',
+      rawQueryString: '',
+      headers: {
+        host: 'b1-bulk-product-seo-enhancer.netlify.app',
+        'x-forwarded-proto': 'https',
+        ...headers
+      },
       queryStringParameters: {},
       multiValueQueryStringParameters: {},
-      headers: {
-        ...headers,
-        host: 'b1-bulk-product-seo-enhancer.netlify.app'
+      pathParameters: {},
+      stageVariables: {},
+      body: originalEvent.body || null,
+      isBase64Encoded: originalEvent.isBase64Encoded || false,
+      requestContext: originalEvent.requestContext || {
+        accountId: 'netlify',
+        apiId: 'netlify',
+        stage: 'prod',
+        requestId: 'netlify-request',
+        http: {
+          method: method,
+          path: '/',
+          protocol: 'HTTP/1.1',
+          sourceIp: '0.0.0.0'
+        }
       },
-      httpMethod: event.httpMethod || 'GET'
+      // Properties used by Netlify adapter
+      path: '/',
+      httpMethod: method,
+      rawUrl: fallbackUrl
     };
   }
 
-  // Return sanitized event object
-  const sanitizedEvent = {
-    ...event,
-    rawUrl: fullUrl,
-    path: path,
-    rawQuery: rawQuery,
-    queryStringParameters: event.queryStringParameters || {},
-    multiValueQueryStringParameters: event.multiValueQueryStringParameters || {},
+  // Create a clean event object with all required properties
+  const cleanEvent = {
+    version: originalEvent.version || '2.0',
+    routeKey: originalEvent.routeKey || '$default',
+    rawPath: path,
+    rawQueryString: queryString,
     headers: {
-      ...headers,
-      host: host
+      host: host,
+      'x-forwarded-proto': protocol,
+      ...headers
     },
-    httpMethod: event.httpMethod || 'GET',
-    isBase64Encoded: event.isBase64Encoded || false,
-    body: event.body || null
+    queryStringParameters: queryStringParameters,
+    multiValueQueryStringParameters: multiValueQueryStringParameters,
+    pathParameters: originalEvent.pathParameters || {},
+    stageVariables: originalEvent.stageVariables || {},
+    body: originalEvent.body || null,
+    isBase64Encoded: originalEvent.isBase64Encoded || false,
+    requestContext: originalEvent.requestContext || {
+      accountId: 'netlify',
+      apiId: 'netlify',
+      stage: 'prod',
+      requestId: 'netlify-request',
+      http: {
+        method: method,
+        path: path,
+        protocol: 'HTTP/1.1',
+        sourceIp: '0.0.0.0'
+      }
+    },
+    // Properties used by Netlify adapter
+    path: path,
+    httpMethod: method,
+    rawUrl: fullUrl
   };
 
-  console.log('Sanitized event URL properties:', {
-    rawUrl: sanitizedEvent.rawUrl,
-    path: sanitizedEvent.path,
-    rawQuery: sanitizedEvent.rawQuery,
-    httpMethod: sanitizedEvent.httpMethod,
-    host: host,
-    protocol: protocol
+  console.log('Created clean event with URL:', cleanEvent.rawUrl);
+  console.log('Event properties:', {
+    path: cleanEvent.path,
+    httpMethod: cleanEvent.httpMethod,
+    host: cleanEvent.headers.host,
+    queryString: cleanEvent.rawQueryString
   });
 
-  return sanitizedEvent;
+  return cleanEvent;
 }
 
-// Create the base Remix handler
-const baseRemixHandler = createRequestHandler({ 
-  build, 
-  mode: process.env.NODE_ENV 
+// Create the standard Netlify Remix handler
+const remixHandler = createRequestHandler({
+  build,
+  mode: process.env.NODE_ENV,
 });
 
 export const handler = async (event, context) => {
   try {
-    // Re-validate environment on each request in case of issues
+    // Re-validate environment on each request
     if (!process.env.SHOPIFY_APP_URL) {
       process.env.SHOPIFY_APP_URL = 'https://b1-bulk-product-seo-enhancer.netlify.app';
     }
@@ -123,11 +176,11 @@ export const handler = async (event, context) => {
       process.env.NODE_ENV = 'production';
     }
 
-    // Sanitize the event object before passing to Remix
-    const sanitizedEvent = sanitizeEvent(event);
+    // Create a completely clean event object
+    const cleanEvent = createCleanEvent(event);
     
-    // Call the base Remix handler with the sanitized event
-    return await baseRemixHandler(sanitizedEvent, context);
+    // Call the Netlify Remix handler with the clean event
+    return await remixHandler(cleanEvent, context);
     
   } catch (error) {
     console.error('Handler error:', error);
@@ -139,7 +192,7 @@ export const handler = async (event, context) => {
     });
     
     // Log the event details that caused the error
-    console.error('Event that caused error:', {
+    console.error('Original event that caused error:', {
       rawUrl: event?.rawUrl,
       path: event?.path,
       httpMethod: event?.httpMethod,

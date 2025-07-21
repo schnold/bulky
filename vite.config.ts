@@ -71,7 +71,7 @@ export default defineConfig(({ command, mode }) => ({
       serverBuildFile: "index.js",
       buildDirectory: "build",
       ssr: true,
-      serverModuleFormat: "cjs",
+      serverModuleFormat: "esm",
     }),
     tsconfigPaths(),
     netlifyPlugin(),

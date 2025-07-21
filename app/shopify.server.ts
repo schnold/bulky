@@ -9,6 +9,16 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
+// Ensure we have a valid app URL
+const getAppUrl = () => {
+  const url = process.env.SHOPIFY_APP_URL;
+  if (!url || url === 'undefined') {
+    console.warn('SHOPIFY_APP_URL is not properly set, using fallback');
+    return 'https://b1-bulk-product-seo-enhancer.netlify.app';
+  }
+  return url;
+};
+
 // Define billing plans
 export const STARTER_PLAN = "Starter Plan";
 export const PRO_PLAN = "Pro Plan";
@@ -19,7 +29,7 @@ const shopify = shopifyApp({
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
   apiVersion: ApiVersion.January25,
   scopes: process.env.SCOPES?.split(","),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
+  appUrl: getAppUrl(),
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,

@@ -1,13 +1,43 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
-import { verifyWebhookOrThrow } from "../utils/webhook-verification.server";
+import { createHmac, timingSafeEqual } from "crypto";
+
+async function verifyWebhook(request: Request): Promise<{ isValid: boolean; body: string }> {
+  const signature = request.headers.get("X-Shopify-Hmac-Sha256");
+  const body = await request.text();
+  const secret = process.env.SHOPIFY_WEBHOOK_SECRET || process.env.SHOPIFY_API_SECRET || "";
+
+  if (!signature || !secret) {
+    return { isValid: false, body };
+  }
+
+  try {
+    const hmac = createHmac("sha256", secret);
+    hmac.update(body, "utf8");
+    const calculatedSignature = hmac.digest("base64");
+
+    const providedSignature = Buffer.from(signature, "base64");
+    const expectedSignature = Buffer.from(calculatedSignature, "base64");
+
+    if (providedSignature.length !== expectedSignature.length) {
+      return { isValid: false, body };
+    }
+
+    const isValid = timingSafeEqual(providedSignature, expectedSignature);
+    return { isValid, body };
+  } catch {
+    return { isValid: false, body };
+  }
+}
 
 export async function action({ request }: ActionFunctionArgs) {
+  const verification = await verifyWebhook(request);
+  
+  if (!verification.isValid) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  
   try {
-    // Verify webhook HMAC - will throw 401 Response if invalid
-    const body = await verifyWebhookOrThrow(request);
-    
-    // Parse the webhook payload
-    const payload = JSON.parse(body);
+    const payload = JSON.parse(verification.body);
     const topic = request.headers.get("X-Shopify-Topic");
     
     // Handle different compliance topics
@@ -28,16 +58,9 @@ export async function action({ request }: ActionFunctionArgs) {
         console.log("Unknown compliance topic:", topic);
     }
     
-    // Return 200 OK to acknowledge receipt
     return new Response("OK", { status: 200 });
     
   } catch (error) {
-    // verifyWebhookOrThrow already throws 401 for invalid HMAC
-    // This catches other errors
-    if (error instanceof Response) {
-      throw error;
-    }
-    
     console.error("Compliance webhook error:", error);
     return new Response("Internal Server Error", { status: 500 });
   }

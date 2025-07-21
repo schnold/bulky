@@ -14,9 +14,7 @@
   # Set memory limit for better performance
   memory = 3008
 
-[edge_functions]
-  # If using edge functions, set timeout
-  timeout = 300
+
 
 # Correct MIME types for assets
 [[headers]]

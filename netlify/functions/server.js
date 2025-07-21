@@ -1,31 +1,40 @@
 import { createRequestHandler } from "@netlify/remix-adapter";
 import * as build from "../../build/server/index.js";
 
-// Validate environment variables at startup
+// Validate environment variables at startup with strict undefined checking
 function validateEnvironment() {
   const requiredEnvVars = ['SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET'];
-  const missing = requiredEnvVars.filter(envVar => !process.env[envVar]);
+  const missing = requiredEnvVars.filter(envVar => !process.env[envVar] || process.env[envVar] === 'undefined');
   
   if (missing.length > 0) {
-    console.warn('Missing environment variables:', missing.join(', '));
+    console.warn('Missing or undefined environment variables:', missing.join(', '));
   }
   
-  // Ensure SHOPIFY_APP_URL is set
-  if (!process.env.SHOPIFY_APP_URL) {
+  // Ensure SHOPIFY_APP_URL is set and not undefined
+  if (!process.env.SHOPIFY_APP_URL || process.env.SHOPIFY_APP_URL === 'undefined') {
     process.env.SHOPIFY_APP_URL = 'https://b1-bulk-product-seo-enhancer.netlify.app';
-    console.warn('SHOPIFY_APP_URL not set, using fallback:', process.env.SHOPIFY_APP_URL);
+    console.warn('SHOPIFY_APP_URL not set or undefined, using fallback:', process.env.SHOPIFY_APP_URL);
   }
   
-  // Ensure NODE_ENV is set
-  if (!process.env.NODE_ENV) {
+  // Ensure NODE_ENV is set and not undefined
+  if (!process.env.NODE_ENV || process.env.NODE_ENV === 'undefined') {
     process.env.NODE_ENV = 'production';
-    console.warn('NODE_ENV not set, using:', process.env.NODE_ENV);
+    console.warn('NODE_ENV not set or undefined, using:', process.env.NODE_ENV);
   }
+
+  // Critical: Ensure no environment variable has the literal string 'undefined'
+  // This is a common issue in serverless environments where build-time variables become 'undefined' strings
+  Object.keys(process.env).forEach(key => {
+    if (process.env[key] === 'undefined') {
+      console.warn(`Environment variable ${key} is set to literal 'undefined', clearing it`);
+      delete process.env[key];
+    }
+  });
   
   console.log('Environment validation complete:');
   console.log('- SHOPIFY_APP_URL:', process.env.SHOPIFY_APP_URL);
   console.log('- NODE_ENV:', process.env.NODE_ENV);
-  console.log('- Required env vars present:', requiredEnvVars.every(v => process.env[v]));
+  console.log('- Required env vars present:', requiredEnvVars.every(v => process.env[v] && process.env[v] !== 'undefined'));
 }
 
 // Validate environment at startup
@@ -159,28 +168,77 @@ function createCleanEvent(originalEvent) {
   return cleanEvent;
 }
 
-// Create the standard Netlify Remix handler
+// Create the standard Netlify Remix handler with proper configuration
 const remixHandler = createRequestHandler({
   build,
-  mode: process.env.NODE_ENV,
+  mode: process.env.NODE_ENV || 'production',
+  // Provide context that ensures environment variables are available
+  getLoadContext: () => ({
+    SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL || 'https://b1-bulk-product-seo-enhancer.netlify.app',
+    NODE_ENV: process.env.NODE_ENV || 'production',
+    SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY,
+    SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET,
+  }),
 });
 
 export const handler = async (event, context) => {
   try {
-    // Re-validate environment on each request
-    if (!process.env.SHOPIFY_APP_URL) {
+    // Ensure ALL required environment variables are available for Remix runtime
+    // This is critical for serverless environments where build-time env vars may not be available at runtime
+    if (!process.env.SHOPIFY_APP_URL || process.env.SHOPIFY_APP_URL === 'undefined') {
       process.env.SHOPIFY_APP_URL = 'https://b1-bulk-product-seo-enhancer.netlify.app';
     }
     
-    if (!process.env.NODE_ENV) {
+    if (!process.env.NODE_ENV || process.env.NODE_ENV === 'undefined') {
       process.env.NODE_ENV = 'production';
     }
+
+    // Ensure these are also set if they exist in context but not in process.env
+    if (context.SHOPIFY_API_KEY && !process.env.SHOPIFY_API_KEY) {
+      process.env.SHOPIFY_API_KEY = context.SHOPIFY_API_KEY;
+    }
+    
+    if (context.SHOPIFY_API_SECRET && !process.env.SHOPIFY_API_SECRET) {
+      process.env.SHOPIFY_API_SECRET = context.SHOPIFY_API_SECRET;
+    }
+
+    // Additional debugging to help track down the undefined URL issue
+    console.log('Runtime environment check:', {
+      'SHOPIFY_APP_URL': process.env.SHOPIFY_APP_URL,
+      'NODE_ENV': process.env.NODE_ENV,
+      'SHOPIFY_API_KEY': process.env.SHOPIFY_API_KEY ? 'SET' : 'NOT SET',
+      'event.url': event?.rawUrl || event?.path || 'undefined',
+      'event.method': event?.httpMethod || 'undefined'
+    });
 
     // Create a completely clean event object
     const cleanEvent = createCleanEvent(event);
     
-    // Call the Netlify Remix handler with the clean event
-    return await remixHandler(cleanEvent, context);
+    // Additional safety check: ensure the cleanEvent has all required properties
+    // that Remix runtime expects to avoid the "Invalid URL" error
+    if (!cleanEvent.rawUrl || cleanEvent.rawUrl === 'undefined') {
+      console.warn('cleanEvent.rawUrl is invalid, using fallback');
+      cleanEvent.rawUrl = 'https://b1-bulk-product-seo-enhancer.netlify.app/';
+    }
+    
+    if (!cleanEvent.headers.host || cleanEvent.headers.host === 'undefined') {
+      console.warn('cleanEvent.headers.host is invalid, using fallback');
+      cleanEvent.headers.host = 'b1-bulk-product-seo-enhancer.netlify.app';
+    }
+
+    // Create an enhanced context object that includes environment variables
+    const enhancedContext = {
+      ...context,
+      env: {
+        SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL || 'https://b1-bulk-product-seo-enhancer.netlify.app',
+        NODE_ENV: process.env.NODE_ENV || 'production',
+        SHOPIFY_API_KEY: process.env.SHOPIFY_API_KEY,
+        SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET,
+      }
+    };
+    
+    // Call the Netlify Remix handler with the clean event and enhanced context
+    return await remixHandler(cleanEvent, enhancedContext);
     
   } catch (error) {
     console.error('Handler error:', error);

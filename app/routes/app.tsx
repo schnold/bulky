@@ -34,8 +34,9 @@ export default function App() {
             <Link to="/app" rel="home">
               Home
             </Link>
-            <Link to="/app/products">Pin Generator</Link>
+            <Link to="/app/products">SEO Optimization</Link>
             <Link to="/app/pricing">Pricing</Link>
+            <Link to="/app/help">Help & Support</Link>
           </NavMenu>
           <Outlet />
         </Frame>

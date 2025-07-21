@@ -1,7 +1,12 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-    const url = new URL(request.url);
+    const requestUrl = request.url || 'https://b1-bulk-product-seo-enhancer.netlify.app/';
+    if (!request.url) {
+        console.warn('request.url is undefined in manifest loader, using fallback');
+    }
+    
+    const url = new URL(requestUrl);
     const searchParams = url.searchParams;
 
     // Get all the 'p' parameters (pages) from the query string

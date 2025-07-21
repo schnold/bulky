@@ -23,12 +23,18 @@ export default async function handleRequest(
     ? "onAllReady"
     : "onShellReady";
 
+  // Ensure we have a valid URL for RemixServer
+  const url = request.url || 'https://b1-bulk-product-seo-enhancer.netlify.app/';
+  if (!request.url) {
+    console.warn('request.url is undefined, using fallback URL:', url);
+  }
+
   return new Promise((resolve, reject) => {
     const { pipe, abort } = renderToPipeableStream(
       <StrictMode>
         <RemixServer
           context={remixContext}
-          url={request.url}
+          url={url}
         />
       </StrictMode>,
       {

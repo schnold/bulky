@@ -84,7 +84,8 @@ export default defineConfig(({ command, mode }) => ({
       "@shopify/app-bridge-react", 
       "@shopify/polaris",
       "@shopify/shopify-api",
-      "@shopify/shopify-app-remix"
+      "@shopify/shopify-app-remix",
+      "@shopify/storefront-api-client"
     ],
   },
   ssr: {
@@ -93,7 +94,8 @@ export default defineConfig(({ command, mode }) => ({
       "@shopify/polaris", 
       "@shopify/shopify-app-remix",
       "@shopify/shopify-api",
-      "@shopify/shopify-app-session-storage-prisma"
+      "@shopify/shopify-app-session-storage-prisma",
+      "@shopify/storefront-api-client"
     ],
     external: ["react", "react-dom"],
   },

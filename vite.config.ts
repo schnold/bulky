@@ -80,7 +80,7 @@ export default defineConfig({
         v3_singleFetch: false,
         v3_routeConfig: false,
       },
-      serverBuildFile: "index.js",
+      serverBuildFile: "server.js",
       buildDirectory: "build",
       ssr: true,
       serverModuleFormat: "esm",

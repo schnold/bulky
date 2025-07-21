@@ -35,8 +35,4 @@
   to = "/assets/:splat"
   status = 200
 
-# Netlify function for Remix server-side rendering
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/server"
-  status = 200
+# Routing is handled automatically by the Netlify Remix adapter plugin

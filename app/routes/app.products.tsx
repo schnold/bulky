@@ -1398,7 +1398,13 @@ export default function Products() {
                                     {product.title}
                                   </Text>
                                   <div style={{ flexShrink: 0 }}>
-                                    <Badge {...getStatusBadge(product.status)} />
+                                    {product.isOptimized ? (
+                                      <Badge tone="success" size="small">
+                                        ✨ Optimized
+                                      </Badge>
+                                    ) : (
+                                      <Badge {...getStatusBadge(product.status)} />
+                                    )}
                                   </div>
                                 </div>
 
@@ -1644,34 +1650,8 @@ export default function Products() {
                                 </div>
                               )}
                               
-                              {/* Optimization Status Badge - Bottom Right Corner */}
-                              {product.isOptimized && (
-                                <div style={{
-                                  position: "absolute",
-                                  bottom: "-8px",
-                                  right: "0px",
-                                  zIndex: 1
-                                }}>
-                                  <Badge tone="success" size="small">
-                                    ✨ Optimized
-                                  </Badge>
-                                </div>
-                              )}
                             </div>
 
-                            {/* Optimization Status Badge */}
-                            {product.isOptimized && (
-                              <div style={{
-                                position: "absolute",
-                                bottom: "12px",
-                                right: "12px",
-                                zIndex: 10
-                              }}>
-                                <Badge tone="magic" size="small">
-                                  ✨ Optimized
-                                </Badge>
-                              </div>
-                            )}
                           </div>
                         </Box>
 

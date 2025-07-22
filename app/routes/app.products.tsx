@@ -441,6 +441,7 @@ export default function Products() {
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [optimizedProducts, setOptimizedProducts] = useState<StoredOptimizations>({});
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const publishFetcher = useFetcher();
 
   // Load optimized products from localStorage on component mount
@@ -663,6 +664,19 @@ export default function Products() {
   // Toggle preview expansion
   const togglePreview = useCallback((productId: string) => {
     setExpandedPreviews(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productId)) {
+        newSet.delete(productId);
+      } else {
+        newSet.add(productId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Toggle description expansion
+  const toggleDescription = useCallback((productId: string) => {
+    setExpandedDescriptions(prev => {
       const newSet = new Set(prev);
       if (newSet.has(productId)) {
         newSet.delete(productId);
@@ -1461,17 +1475,72 @@ export default function Products() {
                                               </Text>
                                             </div>
 
+                                            {/* Optimized Handle */}
+                                            <div style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "8px"
+                                            }}>
+                                              <Text variant="bodySm" tone="subdued" as="span">
+                                                URL: /{optimizedProducts[product.id].optimizedData.handle}
+                                              </Text>
+                                            </div>
+
+                                            {/* Optimized Description Dropdown */}
+                                            <div>
+                                              <InlineStack gap="200" align="space-between">
+                                                <Text variant="bodySm" tone="subdued" as="span">
+                                                  Optimized Description:
+                                                </Text>
+                                                <Button
+                                                  size="micro"
+                                                  variant="tertiary"
+                                                  onClick={() => toggleDescription(product.id)}
+                                                >
+                                                  {expandedDescriptions.has(product.id) ? "Hide" : "Show"}
+                                                </Button>
+                                              </InlineStack>
+                                              
+                                              {expandedDescriptions.has(product.id) && (
+                                                <div style={{
+                                                  marginTop: "8px",
+                                                  padding: "12px",
+                                                  backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                                  borderRadius: "6px",
+                                                  border: "1px solid var(--p-color-border)",
+                                                  maxHeight: "200px",
+                                                  overflowY: "auto"
+                                                }}>
+                                                  <div 
+                                                    style={{
+                                                      fontSize: "14px",
+                                                      lineHeight: "1.4",
+                                                      wordBreak: "break-word"
+                                                    }}
+                                                    dangerouslySetInnerHTML={{ 
+                                                      __html: optimizedProducts[product.id].optimizedData.description 
+                                                    }}
+                                                  />
+                                                </div>
+                                              )}
+                                            </div>
+
                                             {/* Optimized Tags */}
                                             {optimizedProducts[product.id].optimizedData.tags && optimizedProducts[product.id].optimizedData.tags.length > 0 && (
-                                              <div style={{
-                                                display: "flex",
-                                                gap: "4px",
-                                                alignItems: "center",
-                                                flexWrap: "wrap"
-                                              }}>
-                                                {optimizedProducts[product.id].optimizedData.tags.map((tag: string, index: number) => (
-                                                  <Badge key={index} tone="success" size="small">{tag}</Badge>
-                                                ))}
+                                              <div>
+                                                <Text variant="bodySm" tone="subdued" as="span" style={{ marginBottom: "4px", display: "block" }}>
+                                                  Tags:
+                                                </Text>
+                                                <div style={{
+                                                  display: "flex",
+                                                  gap: "4px",
+                                                  alignItems: "center",
+                                                  flexWrap: "wrap"
+                                                }}>
+                                                  {optimizedProducts[product.id].optimizedData.tags.map((tag: string, index: number) => (
+                                                    <Badge key={index} tone="success" size="small">{tag}</Badge>
+                                                  ))}
+                                                </div>
                                               </div>
                                             )}
                                           </BlockStack>

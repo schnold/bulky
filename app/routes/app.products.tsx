@@ -187,6 +187,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const cursor = url.searchParams.get("cursor") || "";
     const direction = url.searchParams.get("direction") || "next";
     const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const productsPerPage = parseInt(url.searchParams.get("productsPerPage") || "15", 10);
 
     // Build GraphQL query filters
     let queryString = "";
@@ -202,8 +203,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     // Pagination parameters
-    const first = direction === "next" ? 15 : undefined;
-    const last = direction === "previous" ? 15 : undefined;
+    const first = direction === "next" ? productsPerPage : undefined;
+    const last = direction === "previous" ? productsPerPage : undefined;
     const after = direction === "next" && cursor ? cursor : undefined;
     const before = direction === "previous" && cursor ? cursor : undefined;
 
@@ -280,7 +281,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       pageInfo: data?.pageInfo || { hasNextPage: false, hasPreviousPage: false, startCursor: undefined, endCursor: undefined },
       totalCount: products.length,
       currentPage: page,
-      productsPerPage: 15,
+      productsPerPage: productsPerPage,
       user: {
         id: user.id,
         plan: user.plan,
@@ -368,6 +369,7 @@ export default function Products() {
   
   const { products, pageInfo, currentPage, productsPerPage, user, subscription } = loaderData;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedProductsPerPage, setSelectedProductsPerPage] = useState(productsPerPage.toString());
   const optimizeFetcher = useFetcher();
 
   const [searchValue, setSearchValue] = useState(searchParams.get("query") || "");
@@ -427,6 +429,15 @@ export default function Products() {
   const handleVendorFilterChange = useCallback((value: string) => {
     setVendorFilter(value);
   }, []);
+
+  const handleProductsPerPageChange = useCallback((value: string) => {
+    setSelectedProductsPerPage(value);
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set("productsPerPage", value);
+    newSearchParams.delete("page"); // Reset to page 1 when changing per page
+    newSearchParams.delete("cursor"); // Reset cursor
+    setSearchParams(newSearchParams);
+  }, [searchParams, setSearchParams]);
 
   // Auto-apply search with debounce
   useEffect(() => {
@@ -1290,9 +1301,22 @@ export default function Products() {
               <Card>
                 <Box padding="400">
                   <InlineStack align="space-between">
-                    <Text variant="bodySm" tone="subdued" as="span">
-                      Showing {((currentPage - 1) * productsPerPage) + 1}-{Math.min(currentPage * productsPerPage, ((currentPage - 1) * productsPerPage) + products.length)} of {products.length} products
-                    </Text>
+                    <InlineStack gap="300" align="center">
+                      <Text variant="bodySm" tone="subdued" as="span">
+                        Showing {((currentPage - 1) * productsPerPage) + 1}-{Math.min(currentPage * productsPerPage, ((currentPage - 1) * productsPerPage) + products.length)} of {products.length} products
+                      </Text>
+                      <Select
+                        label="Products per page"
+                        labelHidden
+                        options={[
+                          { label: "10 per page", value: "10" },
+                          { label: "25 per page", value: "25" },
+                          { label: "50 per page", value: "50" },
+                        ]}
+                        value={selectedProductsPerPage}
+                        onChange={handleProductsPerPageChange}
+                      />
+                    </InlineStack>
                     {(pageInfo.hasNextPage || pageInfo.hasPreviousPage) && (
                       <Pagination
                         hasPrevious={pageInfo.hasPreviousPage}

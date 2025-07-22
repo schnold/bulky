@@ -132,9 +132,9 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
   // Create an abort controller for timeout protection
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    console.warn("⚠️ OpenRouter API call timed out after 45 seconds");
+    console.warn("⚠️ OpenRouter API call timed out after 30 seconds");
     controller.abort();
-  }, 45000); // 45 second timeout
+  }, 30000); // 30 second timeout to prevent serverless function timeout
 
   let response, data, content;
   
@@ -148,7 +148,7 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-chat-v3-0324:free",
+        model: "google/gemini-2.0-flash-001",
         messages: [
           {
             role: "system",

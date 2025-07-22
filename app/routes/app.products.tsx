@@ -850,9 +850,16 @@ export default function Products() {
       const fetcherError = (optimizeFetcher as any)?.data?.error;
       const results = (fetcherData as any)?.results;
       
-      // Check for specific error conditions
-      if (fetcherError || (!results && fetcherData && typeof fetcherData === 'object' && 'error' in fetcherData)) {
-        console.warn(`⚠️ Optimization failed for product: ${currentOptimizingProduct}`, fetcherError || fetcherData);
+      // Check for specific error conditions including network errors
+      const hasNetworkError = optimizeFetcher.state === "idle" && !fetcherData;
+      const hasApiError = fetcherError || (!results && fetcherData && typeof fetcherData === 'object' && 'error' in fetcherData);
+      
+      if (hasNetworkError || hasApiError) {
+        console.warn(`⚠️ Optimization failed for product: ${currentOptimizingProduct}`, {
+          hasNetworkError,
+          fetcherError,
+          fetcherData
+        });
         
         // Handle the failed product
         setFailedProducts(prev => new Set([...prev, currentOptimizingProduct]));
@@ -869,9 +876,15 @@ export default function Products() {
 
         // Show error toast if this was the last product
         if (optimizationQueue.length === 0) {
-          const errorMessage = fetcherError?.includes('timeout') || fetcherError?.includes('504') 
-            ? 'Some optimizations timed out. This can happen with complex products. Try optimizing fewer products at once.'
-            : 'Optimization failed for some products. Please try again.';
+          let errorMessage = 'Optimization failed. Please try again.';
+          
+          if (hasNetworkError) {
+            errorMessage = 'Network timeout occurred. The AI service may be busy. Please try again in a moment.';
+          } else if (fetcherError?.includes('timeout') || fetcherError?.includes('504')) {
+            errorMessage = 'Optimization timed out. This can happen with complex products. Try again or use simpler descriptions.';
+          } else if (fetcherError?.includes('credits') || fetcherError?.includes('insufficient')) {
+            errorMessage = 'Insufficient credits. Please check your plan or wait for credits to reset.';
+          }
           
           setToastMessage(errorMessage);
           setToastError(true);
@@ -900,7 +913,7 @@ export default function Products() {
         return; // Still processing or no data yet
       }
     }
-  }, [fetcherState, bulkOptimizationProgress.isActive, fetcherData, currentOptimizingProduct, optimizationQueue.length]);
+  }, [fetcherState, bulkOptimizationProgress.isActive, fetcherData, currentOptimizingProduct, optimizationQueue.length, optimizeFetcher.state]);
 
   // Add timeout protection for stuck optimizations
   useEffect(() => {
@@ -926,7 +939,7 @@ export default function Products() {
           setToastError(true);
           setShowToast(true);
         }
-      }, 90000); // Reduced to 90 second timeout
+      }, 60000); // 60 second timeout to match API limits
 
       return () => clearTimeout(timeout);
     }

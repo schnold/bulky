@@ -74,7 +74,7 @@ export async function sendContactEmailWithResend(data: ContactFormData): Promise
       tags: [
         { name: 'category', value: data.category },
         { name: 'priority', value: data.priority },
-        { name: 'shop', value: data.shop }
+        { name: 'shop', value: data.shop.replace(/[^a-zA-Z0-9_-]/g, '_') }
       ]
     });
 

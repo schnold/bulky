@@ -450,9 +450,25 @@ export default function Products() {
       if (stored) {
         try {
           const parsedOptimized = JSON.parse(stored);
-          setOptimizedProducts(parsedOptimized);
+          // Clean up old optimizations (older than 24 hours) that haven't been published
+          const now = Date.now();
+          const oneDayMs = 24 * 60 * 60 * 1000;
+          const cleanedOptimized = Object.fromEntries(
+            Object.entries(parsedOptimized).filter(([_, data]: [string, any]) => {
+              if (data.isPublished) return false; // Remove published ones
+              return (now - data.timestamp) < oneDayMs; // Keep recent ones
+            })
+          );
+          setOptimizedProducts(cleanedOptimized);
+          
+          // Update localStorage with cleaned data
+          if (Object.keys(cleanedOptimized).length !== Object.keys(parsedOptimized).length) {
+            localStorage.setItem('bulky-optimized-products', JSON.stringify(cleanedOptimized));
+          }
         } catch (error) {
           console.error('Failed to parse stored optimizations:', error);
+          // Clear corrupted data
+          localStorage.removeItem('bulky-optimized-products');
         }
       }
     }
@@ -460,8 +476,11 @@ export default function Products() {
 
   // Save optimized products to localStorage whenever they change
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && Object.keys(optimizedProducts).length > 0) {
       localStorage.setItem('bulky-optimized-products', JSON.stringify(optimizedProducts));
+    } else if (typeof window !== 'undefined' && Object.keys(optimizedProducts).length === 0) {
+      // Clear localStorage when no optimizations are pending
+      localStorage.removeItem('bulky-optimized-products');
     }
   }, [optimizedProducts]);
 
@@ -608,6 +627,50 @@ export default function Products() {
     setToastMessage("Optimization cancelled");
     setToastError(false);
     setShowToast(true);
+  }, []);
+
+  // Handle publishing optimized data
+  const handlePublishProduct = useCallback((productId: string) => {
+    const optimizedData = optimizedProducts[productId];
+    if (!optimizedData) return;
+
+    publishFetcher.submit(
+      {
+        intent: "publish",
+        productId,
+        optimizedData: JSON.stringify(optimizedData.optimizedData),
+      },
+      {
+        method: "POST",
+        action: "/api/publish"
+      }
+    );
+  }, [optimizedProducts, publishFetcher]);
+
+  // Handle denying/discarding optimized data
+  const handleDenyProduct = useCallback((productId: string) => {
+    setOptimizedProducts(prev => {
+      const updated = { ...prev };
+      delete updated[productId];
+      return updated;
+    });
+    
+    setToastMessage("Optimization discarded");
+    setToastError(false);
+    setShowToast(true);
+  }, []);
+
+  // Toggle preview expansion
+  const togglePreview = useCallback((productId: string) => {
+    setExpandedPreviews(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productId)) {
+        newSet.delete(productId);
+      } else {
+        newSet.add(productId);
+      }
+      return newSet;
+    });
   }, []);
 
   // Handle optimization results
@@ -836,26 +899,16 @@ export default function Products() {
       if (data.success) {
         // Update published status for the products
         if (data.productId) {
-          // Single product publish
-          setOptimizedProducts(prev => ({
-            ...prev,
-            [data.productId]: {
-              ...prev[data.productId],
-              isPublished: true
-            }
-          }));
-          setToastMessage(`Successfully published ${data.productTitle || 'product'}`);
-        } else if (data.publishedCount) {
-          // Bulk publish
+          // Single product publish - remove from localStorage since it's published
           setOptimizedProducts(prev => {
             const updated = { ...prev };
-            Object.keys(updated).forEach(id => {
-              if (!updated[id].isPublished) {
-                updated[id] = { ...updated[id], isPublished: true };
-              }
-            });
+            delete updated[data.productId];
             return updated;
           });
+          setToastMessage(`Successfully published ${data.productTitle || 'product'}`);
+        } else if (data.publishedCount) {
+          // Bulk publish - remove all published items from localStorage
+          setOptimizedProducts({});
           setToastMessage(`Successfully published ${data.publishedCount} product(s)`);
         }
         setToastError(false);
@@ -1354,8 +1407,99 @@ export default function Products() {
                                   </div>
                                 )}
 
-                                {/* Completed Status */}
-                                {completedProducts.has(product.id) && !isOptimizing && (
+                                {/* Optimized Data Preview */}
+                                {optimizedProducts[product.id] && !optimizedProducts[product.id].isPublished && (
+                                  <Card>
+                                    <Box padding="300">
+                                      <BlockStack gap="300">
+                                        <InlineStack gap="200" align="space-between">
+                                          <Text variant="headingSm" tone="success" as="h4">
+                                            ✨ Optimization Ready for Review
+                                          </Text>
+                                          <Button
+                                            size="micro"
+                                            variant="tertiary"
+                                            onClick={() => togglePreview(product.id)}
+                                          >
+                                            {expandedPreviews.has(product.id) ? "Hide" : "Show"} Preview
+                                          </Button>
+                                        </InlineStack>
+                                        
+                                        {expandedPreviews.has(product.id) && (
+                                          <BlockStack gap="300">
+                                            <div style={{
+                                              display: "grid",
+                                              gridTemplateColumns: "1fr 1fr",
+                                              gap: "12px",
+                                              fontSize: "12px"
+                                            }}>
+                                              <div>
+                                                <Text variant="bodyXs" tone="subdued" as="p">CURRENT TITLE:</Text>
+                                                <Text variant="bodyXs" as="p" truncate>{product.title}</Text>
+                                              </div>
+                                              <div>
+                                                <Text variant="bodyXs" tone="subdued" as="p">OPTIMIZED TITLE:</Text>
+                                                <Text variant="bodyXs" tone="success" as="p" truncate>{optimizedProducts[product.id].optimizedData.title}</Text>
+                                              </div>
+                                            </div>
+                                            
+                                            <div style={{
+                                              display: "grid",
+                                              gridTemplateColumns: "1fr 1fr",
+                                              gap: "12px",
+                                              fontSize: "12px"
+                                            }}>
+                                              <div>
+                                                <Text variant="bodyXs" tone="subdued" as="p">CURRENT TYPE:</Text>
+                                                <Text variant="bodyXs" as="p">{product.productType}</Text>
+                                              </div>
+                                              <div>
+                                                <Text variant="bodyXs" tone="subdued" as="p">OPTIMIZED TYPE:</Text>
+                                                <Text variant="bodyXs" tone="success" as="p">{optimizedProducts[product.id].optimizedData.productType}</Text>
+                                              </div>
+                                            </div>
+
+                                            <div>
+                                              <Text variant="bodyXs" tone="subdued" as="p">OPTIMIZED TAGS:</Text>
+                                              <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "4px" }}>
+                                                {optimizedProducts[product.id].optimizedData.tags.slice(0, 5).map((tag: string, index: number) => (
+                                                  <Badge key={index} tone="success" size="small">{tag}</Badge>
+                                                ))}
+                                                {optimizedProducts[product.id].optimizedData.tags.length > 5 && (
+                                                  <Badge tone="success" size="small">
+                                                    +{optimizedProducts[product.id].optimizedData.tags.length - 5}
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </BlockStack>
+                                        )}
+
+                                        <InlineStack gap="200">
+                                          <Button
+                                            variant="primary"
+                                            size="slim"
+                                            onClick={() => handlePublishProduct(product.id)}
+                                            loading={publishFetcher.state === "submitting"}
+                                          >
+                                            Publish Changes
+                                          </Button>
+                                          <Button
+                                            variant="tertiary"
+                                            tone="critical"
+                                            size="slim"
+                                            onClick={() => handleDenyProduct(product.id)}
+                                          >
+                                            Discard
+                                          </Button>
+                                        </InlineStack>
+                                      </BlockStack>
+                                    </Box>
+                                  </Card>
+                                )}
+
+                                {/* Published Status */}
+                                {optimizedProducts[product.id] && optimizedProducts[product.id].isPublished && (
                                   <div style={{
                                     display: "flex",
                                     alignItems: "center",
@@ -1365,7 +1509,7 @@ export default function Products() {
                                     borderRadius: "8px"
                                   }}>
                                     <Text variant="bodySm" tone="success" fontWeight="semibold" as="span">
-                                      ✅ Optimization Complete!
+                                      ✅ Published Successfully!
                                     </Text>
                                   </div>
                                 )}
@@ -1373,7 +1517,7 @@ export default function Products() {
                             </div>
 
                             {/* Right Section: Action Buttons */}
-                            {!isOptimizing && !completedProducts.has(product.id) && (
+                            {!isOptimizing && !optimizedProducts[product.id] && (
                               <div style={{
                                 flexShrink: 0,
                                 display: "flex",

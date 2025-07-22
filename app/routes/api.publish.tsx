@@ -25,8 +25,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       // Update the product using Shopify GraphQL API
       const updateResponse = await adminClient.graphql(
-        `mutation updateProduct($product: ProductUpdateInput!) {
-          productUpdate(product: $product) {
+        `mutation updateProduct($input: ProductInput!) {
+          productUpdate(input: $input) {
             product {
               id
               title
@@ -43,7 +43,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }
         }`,
         {
-          product: {
+          input: {
             id: productId,
             title: optimizedData.title,
             descriptionHtml: optimizedData.description,
@@ -101,8 +101,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       for (const productData of productsData) {
         try {
           const updateResponse = await adminClient.graphql(
-            `mutation updateProduct($product: ProductUpdateInput!) {
-              productUpdate(product: $product) {
+            `mutation updateProduct($input: ProductInput!) {
+              productUpdate(input: $input) {
                 product {
                   id
                   title
@@ -114,7 +114,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               }
             }`,
             {
-              product: {
+              input: {
                 id: productData.id,
                 title: productData.optimizedData.title,
                 descriptionHtml: productData.optimizedData.description,

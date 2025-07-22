@@ -1302,10 +1302,11 @@ export default function Products() {
                         <Box padding="400">
                           <div style={{
                             display: "flex",
-                            alignItems: "center",
+                            alignItems: "flex-start",
                             justifyContent: "space-between",
                             minHeight: "80px",
-                            gap: "16px"
+                            gap: "16px",
+                            width: "100%"
                           }}>
                             {/* Left Section: Checkbox + Image + Content */}
                             <div style={{
@@ -1378,14 +1379,9 @@ export default function Products() {
                                       alignItems: "center",
                                       flexWrap: "wrap"
                                     }}>
-                                      {product.tags.slice(0, 3).map((tag, index) => (
+                                      {product.tags.map((tag, index) => (
                                         <Badge key={index} tone="info" size="small">{tag}</Badge>
                                       ))}
-                                      {product.tags.length > 3 && (
-                                        <Badge tone="info" size="small">
-                                          {`+${product.tags.length - 3}`}
-                                        </Badge>
-                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -1409,93 +1405,99 @@ export default function Products() {
 
                                 {/* Optimized Data Preview */}
                                 {optimizedProducts[product.id] && !optimizedProducts[product.id].isPublished && (
-                                  <Card>
-                                    <Box padding="300">
-                                      <BlockStack gap="300">
-                                        <InlineStack gap="200" align="space-between">
-                                          <Text variant="headingSm" tone="success" as="h4">
-                                            ✨ Optimization Ready for Review
-                                          </Text>
-                                          <Button
-                                            size="micro"
-                                            variant="tertiary"
-                                            onClick={() => togglePreview(product.id)}
-                                          >
-                                            {expandedPreviews.has(product.id) ? "Hide" : "Show"} Preview
-                                          </Button>
-                                        </InlineStack>
-                                        
-                                        {expandedPreviews.has(product.id) && (
-                                          <BlockStack gap="300">
+                                  <div style={{
+                                    marginTop: "12px",
+                                    padding: "12px",
+                                    backgroundColor: "var(--p-color-bg-success-subdued)",
+                                    borderRadius: "8px",
+                                    border: "1px solid var(--p-color-border-success)"
+                                  }}>
+                                    <BlockStack gap="300">
+                                      <InlineStack gap="200" align="space-between">
+                                        <Text variant="bodyMd" tone="success" fontWeight="semibold" as="span">
+                                          ✨ Optimized Version Ready
+                                        </Text>
+                                        <Button
+                                          size="micro"
+                                          variant="tertiary"
+                                          onClick={() => togglePreview(product.id)}
+                                        >
+                                          {expandedPreviews.has(product.id) ? "Hide" : "Preview"}
+                                        </Button>
+                                      </InlineStack>
+                                      
+                                      {expandedPreviews.has(product.id) && (
+                                        <div style={{
+                                          backgroundColor: "var(--p-color-bg-surface)",
+                                          padding: "12px",
+                                          borderRadius: "6px",
+                                          border: "1px solid var(--p-color-border)"
+                                        }}>
+                                          <BlockStack gap="200">
+                                            {/* Optimized Title and Status Row */}
                                             <div style={{
-                                              display: "grid",
-                                              gridTemplateColumns: "1fr 1fr",
+                                              display: "flex",
+                                              alignItems: "center",
                                               gap: "12px",
-                                              fontSize: "12px"
+                                              flexWrap: "nowrap"
                                             }}>
-                                              <div>
-                                                <Text variant="bodyXs" tone="subdued" as="p">CURRENT TITLE:</Text>
-                                                <Text variant="bodyXs" as="p" truncate>{product.title}</Text>
-                                              </div>
-                                              <div>
-                                                <Text variant="bodyXs" tone="subdued" as="p">OPTIMIZED TITLE:</Text>
-                                                <Text variant="bodyXs" tone="success" as="p" truncate>{optimizedProducts[product.id].optimizedData.title}</Text>
-                                              </div>
-                                            </div>
-                                            
-                                            <div style={{
-                                              display: "grid",
-                                              gridTemplateColumns: "1fr 1fr",
-                                              gap: "12px",
-                                              fontSize: "12px"
-                                            }}>
-                                              <div>
-                                                <Text variant="bodyXs" tone="subdued" as="p">CURRENT TYPE:</Text>
-                                                <Text variant="bodyXs" as="p">{product.productType}</Text>
-                                              </div>
-                                              <div>
-                                                <Text variant="bodyXs" tone="subdued" as="p">OPTIMIZED TYPE:</Text>
-                                                <Text variant="bodyXs" tone="success" as="p">{optimizedProducts[product.id].optimizedData.productType}</Text>
+                                              <Text variant="headingMd" tone="success" as="h3" truncate>
+                                                {optimizedProducts[product.id].optimizedData.title}
+                                              </Text>
+                                              <div style={{ flexShrink: 0 }}>
+                                                <Badge status="success">Optimized</Badge>
                                               </div>
                                             </div>
 
-                                            <div>
-                                              <Text variant="bodyXs" tone="subdued" as="p">OPTIMIZED TAGS:</Text>
-                                              <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "4px" }}>
-                                                {optimizedProducts[product.id].optimizedData.tags.slice(0, 5).map((tag: string, index: number) => (
+                                            {/* Optimized Meta Info Row */}
+                                            <div style={{
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "8px",
+                                              flexWrap: "wrap"
+                                            }}>
+                                              <Text variant="bodySm" tone="subdued" as="span">
+                                                {optimizedProducts[product.id].optimizedData.productType} • {optimizedProducts[product.id].optimizedData.vendor || product.vendor}
+                                              </Text>
+                                            </div>
+
+                                            {/* Optimized Tags */}
+                                            {optimizedProducts[product.id].optimizedData.tags && optimizedProducts[product.id].optimizedData.tags.length > 0 && (
+                                              <div style={{
+                                                display: "flex",
+                                                gap: "4px",
+                                                alignItems: "center",
+                                                flexWrap: "wrap"
+                                              }}>
+                                                {optimizedProducts[product.id].optimizedData.tags.map((tag: string, index: number) => (
                                                   <Badge key={index} tone="success" size="small">{tag}</Badge>
                                                 ))}
-                                                {optimizedProducts[product.id].optimizedData.tags.length > 5 && (
-                                                  <Badge tone="success" size="small">
-                                                    +{optimizedProducts[product.id].optimizedData.tags.length - 5}
-                                                  </Badge>
-                                                )}
                                               </div>
-                                            </div>
+                                            )}
                                           </BlockStack>
-                                        )}
+                                        </div>
+                                      )}
 
-                                        <InlineStack gap="200">
-                                          <Button
-                                            variant="primary"
-                                            size="slim"
-                                            onClick={() => handlePublishProduct(product.id)}
-                                            loading={publishFetcher.state === "submitting"}
-                                          >
-                                            Publish Changes
-                                          </Button>
-                                          <Button
-                                            variant="tertiary"
-                                            tone="critical"
-                                            size="slim"
-                                            onClick={() => handleDenyProduct(product.id)}
-                                          >
-                                            Discard
-                                          </Button>
-                                        </InlineStack>
-                                      </BlockStack>
-                                    </Box>
-                                  </Card>
+                                      <InlineStack gap="200">
+                                        <Button
+                                          variant="primary"
+                                          size="slim"
+                                          onClick={() => handlePublishProduct(product.id)}
+                                          loading={publishFetcher.state === "submitting"}
+                                        >
+                                          Publish Changes
+                                        </Button>
+                                        <Button
+                                          variant="tertiary"
+                                          tone="critical"
+                                          size="slim"
+                                          onClick={() => handleDenyProduct(product.id)}
+                                        >
+                                          Discard
+                                        </Button>
+                                      </InlineStack>
+                                    </BlockStack>
+                                  </div>
                                 )}
 
                                 {/* Published Status */}

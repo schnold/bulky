@@ -69,6 +69,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (updatedProduct) {
         console.log(`🎉 Successfully published product: ${updatedProduct.title}`);
+        
+        // Mark product as optimized in database
+        const { ensureUserExists } = await import("../utils/db.server");
+        const { markProductAsOptimized } = await import("../models/product-optimization.server");
+        
+        try {
+          const user = await ensureUserExists(session.shop);
+          await markProductAsOptimized(
+            productId,
+            session.shop,
+            user.id,
+            {
+              title: optimizedData.title,
+              handle: optimizedData.handle,
+              productType: optimizedData.productType
+            }
+          );
+          console.log(`✅ Marked product ${productId} as optimized in database`);
+        } catch (dbError) {
+          console.error(`⚠️ Failed to mark product as optimized in database:`, dbError);
+          // Don't fail the whole operation, just log the error
+        }
+        
         return json({
           success: true,
           productId,
@@ -135,6 +158,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           } else if (updatedProduct) {
             publishedCount++;
             console.log(`✅ Published: ${updatedProduct.title}`);
+            
+            // Mark product as optimized in database for bulk publish
+            try {
+              const { ensureUserExists } = await import("../utils/db.server");
+              const { markProductAsOptimized } = await import("../models/product-optimization.server");
+              const user = await ensureUserExists(session.shop);
+              
+              await markProductAsOptimized(
+                productData.id,
+                session.shop,
+                user.id,
+                {
+                  title: productData.optimizedData.title,
+                  handle: productData.optimizedData.handle,
+                  productType: productData.optimizedData.productType,
+                }
+              );
+            } catch (dbError) {
+              console.error(`⚠️ Failed to mark bulk product ${productData.id} as optimized:`, dbError);
+            }
           }
         } catch (error) {
           console.error(`❌ Error publishing product ${productData.id}:`, error);

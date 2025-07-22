@@ -51,6 +51,8 @@ interface Product {
   createdAt: string;
   isOptimizing?: boolean;
   optimizationProgress?: number;
+  isOptimized?: boolean;
+  optimizedAt?: string;
 }
 
 interface OptimizedProductData {
@@ -302,8 +304,32 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     console.log(`✅ Products loader - Retrieved ${products.length} products`);
 
+    // Get optimization status for all visible products
+    let productsWithOptimizationStatus = products;
+    if (products.length > 0) {
+      try {
+        const { getOptimizationStatusForProducts } = await import("../models/product-optimization.server");
+        const productIds = products.map(p => p.id);
+        const optimizationStatusMap = await getOptimizationStatusForProducts(productIds, session.shop);
+        
+        productsWithOptimizationStatus = products.map(product => {
+          const status = optimizationStatusMap.get(product.id);
+          return {
+            ...product,
+            isOptimized: status?.isOptimized || false,
+            optimizedAt: status?.optimizedAt?.toISOString(),
+          };
+        });
+        
+        console.log(`✅ Products loader - Added optimization status for ${productsWithOptimizationStatus.length} products`);
+      } catch (error) {
+        console.error("❌ Failed to fetch optimization status:", error);
+        // Continue without optimization status if there's an error
+      }
+    }
+
     return json<LoaderData>({
-      products,
+      products: productsWithOptimizationStatus,
       pageInfo: data?.pageInfo || { hasNextPage: false, hasPreviousPage: false, startCursor: undefined, endCursor: undefined },
       totalCount: products.length,
       currentPage: page,
@@ -1320,7 +1346,8 @@ export default function Products() {
                             justifyContent: "space-between",
                             minHeight: "80px",
                             gap: "16px",
-                            width: "100%"
+                            width: "100%",
+                            position: "relative"
                           }}>
                             {/* Left Section: Checkbox + Image + Content */}
                             <div style={{
@@ -1587,27 +1614,62 @@ export default function Products() {
                               </div>
                             </div>
 
-                            {/* Right Section: Action Buttons */}
-                            {!isOptimizing && !optimizedProducts[product.id] && (
+                            {/* Right Section: Action Buttons and Status Badge */}
+                            <div style={{
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: "8px",
+                              position: "relative"
+                            }}>
+                              {!isOptimizing && !optimizedProducts[product.id] && (
+                                <div style={{
+                                  display: "flex",
+                                  gap: "8px"
+                                }}>
+                                  <SparkleButton
+                                    onClick={() => handleOptimizeSingle(product.id)}
+                                    disabled={isOptimizing || bulkOptimizationProgress.isActive}
+                                    variant="primary"
+                                  >
+                                    Quick Optimize
+                                  </SparkleButton>
+                                  <SparkleButton
+                                    onClick={() => handleAdvancedOptimize([product.id])}
+                                    disabled={isOptimizing || bulkOptimizationProgress.isActive}
+                                    variant="secondary"
+                                  >
+                                    Advanced
+                                  </SparkleButton>
+                                </div>
+                              )}
+                              
+                              {/* Optimization Status Badge - Bottom Right Corner */}
+                              {product.isOptimized && (
+                                <div style={{
+                                  position: "absolute",
+                                  bottom: "-8px",
+                                  right: "0px",
+                                  zIndex: 1
+                                }}>
+                                  <Badge tone="success" size="small">
+                                    ✨ Optimized
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Optimization Status Badge */}
+                            {product.isOptimized && (
                               <div style={{
-                                flexShrink: 0,
-                                display: "flex",
-                                gap: "8px"
+                                position: "absolute",
+                                bottom: "12px",
+                                right: "12px",
+                                zIndex: 10
                               }}>
-                                <SparkleButton
-                                  onClick={() => handleOptimizeSingle(product.id)}
-                                  disabled={isOptimizing || bulkOptimizationProgress.isActive}
-                                  variant="primary"
-                                >
-                                  Quick Optimize
-                                </SparkleButton>
-                                <SparkleButton
-                                  onClick={() => handleAdvancedOptimize([product.id])}
-                                  disabled={isOptimizing || bulkOptimizationProgress.isActive}
-                                  variant="secondary"
-                                >
-                                  Advanced
-                                </SparkleButton>
+                                <Badge tone="magic" size="small">
+                                  ✨ Optimized
+                                </Badge>
                               </div>
                             )}
                           </div>

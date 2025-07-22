@@ -39,6 +39,7 @@ model User {
   onboardingCompleted Boolean       @default(false)
   keywords            Keyword[]
   subscriptions       Subscription[]
+  optimizations       ProductOptimization[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 }
@@ -68,4 +69,23 @@ model Keyword {
   createdAt DateTime @default(now())
 
   @@unique([userId, keyword]) // Prevent duplicate keywords per user
+}
+
+model ProductOptimization {
+  id                String   @id @default(cuid())
+  shopifyProductId  String   // Shopify product ID (e.g., "gid://shopify/Product/123456789")
+  shop              String   // Shop domain (e.g., "example.myshopify.com")
+  userId            String   // Reference to user who owns this shop
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isOptimized       Boolean  @default(false)
+  optimizedAt       DateTime?
+  optimizedTitle    String?
+  optimizedHandle   String?
+  optimizedType     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([shopifyProductId, shop]) // Ensure one record per product per shop
+  @@index([shop]) // Index for efficient shop-based queries
+  @@index([userId]) // Index for user-based queries
 }

@@ -306,8 +306,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const aiDuration = Date.now() - aiStartTime;
         console.log(`✅ AI optimization complete for: ${product.title} (took ${aiDuration}ms)`);
 
-        // Update the product using correct Shopify ProductUpdate mutation
-        console.log("💾 Updating product with optimized data:", {
+        // Store the optimized data for review instead of auto-publishing
+        console.log(`✅ AI optimization complete for: ${product.title} (took ${aiDuration}ms)`);
+        console.log("📊 Optimized data ready for review:", {
           id: productId,
           title: optimizedData.title,
           description: optimizedData.description,
@@ -316,76 +317,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           tags: optimizedData.tags,
         });
 
-        const updateStartTime = Date.now();
-        const updateResponse = await adminClient.graphql(
-          `mutation updateProduct($product: ProductUpdateInput!) {
-            productUpdate(product: $product) {
-              product {
-                id
-                title
-                descriptionHtml
-                handle
-                productType
-                vendor
-                tags
-                status
-              }
-              userErrors {
-                field
-                message
-              }
-            }
-          }`,
-          {
-            product: {
-              id: productId,
-              title: optimizedData.title,
-              descriptionHtml: optimizedData.description,
-              handle: optimizedData.handle,
-              productType: optimizedData.productType,
-              vendor: optimizedData.vendor || "",
-              tags: optimizedData.tags,
-            },
-          }
-        );
+        // Return success with optimized data for client-side storage
+        results.push({ 
+          productId, 
+          success: true, 
+          optimizedData,
+          originalProduct: product
+        });
 
-        const updateData = await updateResponse.json();
-        const updateDuration = Date.now() - updateStartTime;
-        console.log(`📋 Shopify update complete (took ${updateDuration}ms):`, JSON.stringify(updateData, null, 2));
-
-        const userErrors = updateData.data?.productUpdate?.userErrors;
-        const updatedProduct = updateData.data?.productUpdate?.product;
-
-        if (userErrors && userErrors.length > 0) {
-          console.error("❌ Shopify update errors:", userErrors);
-          results.push({
-            productId,
-            success: false,
-            error: userErrors.map((e: any) => e.message).join(", ")
-          });
-        } else if (updatedProduct) {
-          console.log(`🎉 Successfully optimized and updated product: ${updatedProduct.title}`);
-          console.log("📊 Updated product data:", {
-            id: updatedProduct.id,
-            title: updatedProduct.title,
-            description: updatedProduct.descriptionHtml,
-            handle: updatedProduct.handle,
-            productType: updatedProduct.productType,
-            tags: updatedProduct.tags,
-          });
-          results.push({ productId, success: true, optimizedData, updatedProduct });
-        } else {
-          console.error("❌ No product returned from update mutation");
-          results.push({
-            productId,
-            success: false,
-            error: "No product returned from update mutation"
-          });
-        }
-
-        // Remove delay since we're processing one at a time now
-        // No delay needed between API calls when processing single products
-        console.log(`⏰ Total processing time: ${Date.now() - (aiStartTime - aiDuration)}ms`);
+        // No delay needed since we're no longer updating Shopify directly
+        console.log(`⏰ Total processing time: ${Date.now() - aiStartTime}ms`);
       } catch (error) {
         console.error(`❌ Error optimizing product ${productId}:`, error);
         console.error(`❌ Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
@@ -397,7 +338,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
     }
 
-    // Deduct credits for successful optimizations
+    // Deduct credits for successful optimizations (now happens on optimization, not publishing)
     const successfulOptimizations = results.filter(r => r.success).length;
     if (successfulOptimizations > 0) {
       const newCredits = user.credits - successfulOptimizations;
@@ -405,7 +346,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`💳 Deducted ${successfulOptimizations} credits from ${session.shop}. New balance: ${newCredits}`);
     }
 
-    console.log(`🏁 Optimization complete! Results: ${results.filter(r => r.success).length} successful, ${results.filter(r => !r.success).length} failed`);
+    console.log(`🏁 Optimization complete! Results: ${results.filter(r => r.success).length} successful, ${results.filter(r => !r.success).length} failed (ready for review)`);
     return json({
       results,
       creditsUsed: successfulOptimizations,

@@ -53,6 +53,32 @@ interface Product {
   optimizationProgress?: number;
 }
 
+interface OptimizedProductData {
+  id: string;
+  originalData: {
+    title: string;
+    descriptionHtml: string;
+    handle: string;
+    productType: string;
+    vendor: string;
+    tags: string[];
+  };
+  optimizedData: {
+    title: string;
+    description: string;
+    handle: string;
+    productType: string;
+    vendor: string;
+    tags: string[];
+  };
+  timestamp: number;
+  isPublished: boolean;
+}
+
+interface StoredOptimizations {
+  [productId: string]: OptimizedProductData;
+}
+
 interface LoaderData {
   products: Product[];
   pageInfo: {
@@ -413,6 +439,31 @@ export default function Products() {
   const [pendingOptimizationIds, setPendingOptimizationIds] = useState<string[]>([]);
   const [showSpecialInstructionsModal, setShowSpecialInstructionsModal] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState("");
+  const [optimizedProducts, setOptimizedProducts] = useState<StoredOptimizations>({});
+  const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
+  const publishFetcher = useFetcher();
+
+  // Load optimized products from localStorage on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('bulky-optimized-products');
+      if (stored) {
+        try {
+          const parsedOptimized = JSON.parse(stored);
+          setOptimizedProducts(parsedOptimized);
+        } catch (error) {
+          console.error('Failed to parse stored optimizations:', error);
+        }
+      }
+    }
+  }, []);
+
+  // Save optimized products to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bulky-optimized-products', JSON.stringify(optimizedProducts));
+    }
+  }, [optimizedProducts]);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchValue(value);
@@ -611,6 +662,7 @@ export default function Products() {
 
       if (results && results.length > 0) {
         const result = results[0]; // Single product result
+        const currentProduct = products.find(p => p.id === currentOptimizingProduct);
 
         // Remove from optimizing and add to appropriate set
         setOptimizingProducts(prev => {
@@ -619,7 +671,28 @@ export default function Products() {
           return newSet;
         });
 
-        if (result.success) {
+        if (result.success && currentProduct && result.optimizedData) {
+          // Store optimized data in localStorage for review instead of auto-publishing
+          const optimizedProductData: OptimizedProductData = {
+            id: currentOptimizingProduct,
+            originalData: {
+              title: currentProduct.title,
+              descriptionHtml: currentProduct.descriptionHtml,
+              handle: currentProduct.handle,
+              productType: currentProduct.productType,
+              vendor: currentProduct.vendor,
+              tags: currentProduct.tags
+            },
+            optimizedData: result.optimizedData,
+            timestamp: Date.now(),
+            isPublished: false
+          };
+
+          setOptimizedProducts(prev => ({
+            ...prev,
+            [currentOptimizingProduct]: optimizedProductData
+          }));
+
           setCompletedProducts(prev => new Set([...prev, currentOptimizingProduct]));
           setBulkOptimizationProgress(prev => ({
             ...prev,
@@ -643,7 +716,7 @@ export default function Products() {
 
           // Show completion message
           if (totalCompleted > 0) {
-            setToastMessage(`Successfully optimized ${totalCompleted} product(s)${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`);
+            setToastMessage(`Successfully optimized ${totalCompleted} product(s) for review${totalFailed > 0 ? `, ${totalFailed} failed` : ''}`);
             setToastError(totalFailed > 0);
             setShowToast(true);
           }
@@ -666,7 +739,7 @@ export default function Products() {
         }
       }
     }
-  }, [fetcherData, fetcherState, currentOptimizingProduct, optimizationQueue.length, completedProducts.size, failedProducts.size]);
+  }, [fetcherData, fetcherState, currentOptimizingProduct, optimizationQueue.length, completedProducts.size, failedProducts.size, products]);
 
   // Handle fetch state changes and errors
   useEffect(() => {
@@ -755,6 +828,45 @@ export default function Products() {
       return () => clearTimeout(timeout);
     }
   }, [currentOptimizingProduct, fetcherState]);
+
+  // Handle publish fetch results
+  useEffect(() => {
+    if (publishFetcher.state === "idle" && publishFetcher.data) {
+      const data = publishFetcher.data as any;
+      if (data.success) {
+        // Update published status for the products
+        if (data.productId) {
+          // Single product publish
+          setOptimizedProducts(prev => ({
+            ...prev,
+            [data.productId]: {
+              ...prev[data.productId],
+              isPublished: true
+            }
+          }));
+          setToastMessage(`Successfully published ${data.productTitle || 'product'}`);
+        } else if (data.publishedCount) {
+          // Bulk publish
+          setOptimizedProducts(prev => {
+            const updated = { ...prev };
+            Object.keys(updated).forEach(id => {
+              if (!updated[id].isPublished) {
+                updated[id] = { ...updated[id], isPublished: true };
+              }
+            });
+            return updated;
+          });
+          setToastMessage(`Successfully published ${data.publishedCount} product(s)`);
+        }
+        setToastError(false);
+        setShowToast(true);
+      } else {
+        setToastMessage(data.error || 'Publishing failed');
+        setToastError(true);
+        setShowToast(true);
+      }
+    }
+  }, [publishFetcher.state, publishFetcher.data]);
 
   const filters = [
     {

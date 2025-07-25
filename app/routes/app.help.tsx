@@ -351,17 +351,17 @@ export default function Help() {
                       Quick Links
                     </Text>
                     <BlockStack gap="300">
-                      <Link to="products" style={{ textDecoration: 'none' }}>
+                      <Link to="/app/products" style={{ textDecoration: 'none' }}>
                         <Button variant="plain" fullWidth textAlign="start">
                           🚀 Optimize Products
                         </Button>
                       </Link>
-                      <Link to="pricing" style={{ textDecoration: 'none' }}>
+                      <Link to="/app/pricing" style={{ textDecoration: 'none' }}>
                         <Button variant="plain" fullWidth textAlign="start">
                           💳 View Pricing Plans
                         </Button>
                       </Link>
-                      <Link to="dashboard" style={{ textDecoration: 'none' }}>
+                      <Link to="/app/dashboard" style={{ textDecoration: 'none' }}>
                         <Button variant="plain" fullWidth textAlign="start">
                           📊 Account Dashboard
                         </Button>

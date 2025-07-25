@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, useFetcher } from "@remix-run/react";
+import { useLoaderData, useActionData, useFetcher, Link } from "@remix-run/react";
 import {
   Page,
   Card,
@@ -351,15 +351,21 @@ export default function Help() {
                       Quick Links
                     </Text>
                     <BlockStack gap="300">
-                      <Button variant="plain" url="products" fullWidth textAlign="start">
-                        🚀 Optimize Products
-                      </Button>
-                      <Button variant="plain" url="pricing" fullWidth textAlign="start">
-                        💳 View Pricing Plans
-                      </Button>
-                      <Button variant="plain" url="dashboard" fullWidth textAlign="start">
-                        📊 Account Dashboard
-                      </Button>
+                      <Link to="products" style={{ textDecoration: 'none' }}>
+                        <Button variant="plain" fullWidth textAlign="start">
+                          🚀 Optimize Products
+                        </Button>
+                      </Link>
+                      <Link to="pricing" style={{ textDecoration: 'none' }}>
+                        <Button variant="plain" fullWidth textAlign="start">
+                          💳 View Pricing Plans
+                        </Button>
+                      </Link>
+                      <Link to="dashboard" style={{ textDecoration: 'none' }}>
+                        <Button variant="plain" fullWidth textAlign="start">
+                          📊 Account Dashboard
+                        </Button>
+                      </Link>
                       <Divider />
                       <Text variant="bodySm" tone="subdued" as="p">
                         Need immediate help? Use the contact form above to reach our support team.

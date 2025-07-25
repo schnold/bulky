@@ -41,9 +41,9 @@ interface PlanFeature {
 const planFeatures: PlanFeature[] = [
   {
     name: "Monthly SEO Optimization Credits",
-    free: "5 credits",
-    starter: "20 credits",
-    pro: "100 credits",
+    free: "10 credits",
+    starter: "100 credits",
+    pro: "500 credits",
     enterprise: "Unlimited",
   },
   {
@@ -84,7 +84,7 @@ const planFeatures: PlanFeature[] = [
   {
     name: "Bulk Product Optimization",
     free: "Up to 3",
-    starter: "Up to 10",
+    starter: "Up to 30",
     pro: "Up to 100",
     enterprise: "Unlimited",
   },
@@ -112,7 +112,6 @@ interface LoaderData {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-
   const { session, billing } = await authenticate.admin(request);
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
@@ -153,26 +152,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "subscribe") {
     try {
-      // Validate plan name and get the correct plan key
-      const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
-      if (!planName || !validPlans.includes(planName)) {
+      // Map plan names to actual plan objects
+      const planMap = {
+        [STARTER_PLAN]: STARTER_PLAN,
+        [PRO_PLAN]: PRO_PLAN,
+        [ENTERPRISE_PLAN]: ENTERPRISE_PLAN,
+      };
+
+      const selectedPlan = planMap[planName as keyof typeof planMap];
+      if (!selectedPlan) {
         return json({ error: "Invalid plan selected" }, { status: 400 });
       }
 
-      await billing.require({
-        plans: [planName as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN],
+      // billing.request throws a redirect response, it doesn't return
+      await billing.request({
+        plan: selectedPlan as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN,
         isTest: process.env.NODE_ENV !== "production",
-        onFailure: async () => {
-          return await billing.request({
-            plan: planName as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN,
-            isTest: process.env.NODE_ENV !== "production",
-            returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
-          });
-        },
+        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
       });
 
+      // This line should never be reached due to the redirect above
       return json({ success: true });
     } catch (error) {
+      console.error("Billing error:", error);
       return json({ error: "Failed to process subscription" }, { status: 400 });
     }
   }
@@ -379,6 +381,11 @@ export default function Pricing() {
   const [showToast, setShowToast] = useState(false);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
 
+  // Import plan constants for consistency
+  const IMPORTED_STARTER_PLAN = "Starter Plan";
+  const IMPORTED_PRO_PLAN = "Pro Plan";
+  const IMPORTED_ENTERPRISE_PLAN = "Enterprise Plan";
+
   const isLoading = navigation.state === "submitting";
 
   const faqData = [
@@ -404,7 +411,12 @@ export default function Pricing() {
     }
   ];
 
-  const handleSubscribe = (planName: string) => {
+  const handleSubscribe = async (planName: string) => {
+    // Skip form submission for free plan since it doesn't require billing
+    if (planName === FREE_PLAN) {
+      return;
+    }
+
     const form = document.createElement("form");
     form.method = "POST";
     form.style.display = "none";
@@ -527,8 +539,8 @@ export default function Pricing() {
                   features={planFeatures.map(f => f.starter)}
                   buttonText="Get Started"
                   buttonVariant="secondary"
-                  isCurrentPlan={currentSubscription?.planName === STARTER_PLAN}
-                  onSubscribe={() => handleSubscribe(STARTER_PLAN)}
+                  isCurrentPlan={currentSubscription?.planName === IMPORTED_STARTER_PLAN}
+                  onSubscribe={() => handleSubscribe(IMPORTED_STARTER_PLAN)}
                   loading={isLoading}
                 />
               </Grid.Cell>
@@ -543,8 +555,8 @@ export default function Pricing() {
                   buttonText="Get Started"
                   buttonVariant="primary"
                   isPopular={true}
-                  isCurrentPlan={currentSubscription?.planName === PRO_PLAN}
-                  onSubscribe={() => handleSubscribe(PRO_PLAN)}
+                  isCurrentPlan={currentSubscription?.planName === IMPORTED_PRO_PLAN}
+                  onSubscribe={() => handleSubscribe(IMPORTED_PRO_PLAN)}
                   loading={isLoading}
                 />
               </Grid.Cell>
@@ -558,8 +570,8 @@ export default function Pricing() {
                   features={planFeatures.map(f => f.enterprise)}
                   buttonText="Contact Sales"
                   buttonVariant="secondary"
-                  isCurrentPlan={currentSubscription?.planName === ENTERPRISE_PLAN}
-                  onSubscribe={() => handleSubscribe(ENTERPRISE_PLAN)}
+                  isCurrentPlan={currentSubscription?.planName === IMPORTED_ENTERPRISE_PLAN}
+                  onSubscribe={() => handleSubscribe(IMPORTED_ENTERPRISE_PLAN)}
                   loading={isLoading}
                 />
               </Grid.Cell>

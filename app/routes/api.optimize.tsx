@@ -148,7 +148,7 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "google/gemini-2.0-flash-lite-001",
         messages: [
           {
             role: "system",

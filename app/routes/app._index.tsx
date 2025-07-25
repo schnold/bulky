@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { useNavigate } from "@remix-run/react";
 
 // Define action response types
 type ActionResponse =
@@ -135,6 +136,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function Index() {
   const { user } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResponse>();
+  const navigate = useNavigate();
 
   const [newKeyword, setNewKeyword] = useState("");
   const [showToast, setShowToast] = useState(false);
@@ -214,7 +216,10 @@ export default function Index() {
                 <Text variant="bodyMd" as="p">
                   Optimize your Shopify products with AI-powered SEO using 2025 best practices.
                 </Text>
-                <Button url="/app/products" variant="primary">
+                <Button 
+                  variant="primary"
+                  onClick={() => navigate("/app/products")}
+                >
                   Optimize Products
                 </Button>
               </BlockStack>

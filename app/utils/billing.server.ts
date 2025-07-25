@@ -2,7 +2,7 @@ import { redirect } from "@remix-run/node";
 import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopify.server";
 import { getUserByShop } from "../models/user.server";
 
-export async function requireBilling(request: Request, plans: string[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
+export async function requireBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
   const { session, billing } = await authenticate.admin(request);
   
   try {
@@ -22,9 +22,8 @@ export async function requireBilling(request: Request, plans: string[] = [STARTE
   }
 }
 
-export async function checkBilling(request: Request, plans: string[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
+export async function checkBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
   const { session, billing } = await authenticate.admin(request);
-  
   const billingCheck = await billing.check({
     plans,
     isTest: process.env.NODE_ENV !== "production",

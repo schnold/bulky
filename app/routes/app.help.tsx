@@ -156,10 +156,11 @@ export default function Help() {
   };
 
 
-  // Show success toast
+  // Show success toast and handle form reset
   React.useEffect(() => {
     if (actionData && 'success' in actionData && actionData.success) {
       setShowToast(true);
+      // Reset form after successful submission
       setContactForm({
         name: "",
         email: "",
@@ -171,10 +172,31 @@ export default function Help() {
     }
   }, [actionData]);
 
+  // Also show success toast for fetcher submissions
+  React.useEffect(() => {
+    if (fetcher.data && 'success' in fetcher.data && fetcher.data.success) {
+      setShowToast(true);
+      // Reset form after successful submission
+      setContactForm({
+        name: "",
+        email: "",
+        subject: "",
+        category: "general",
+        message: "",
+        priority: "medium"
+      });
+    }
+  }, [fetcher.data]);
+
   const toastMarkup = showToast ? (
     <Toast
-      content={(actionData && 'message' in actionData) ? actionData.message : "Success!"}
+      content={
+        (actionData && 'message' in actionData && actionData.message) ||
+        (fetcher.data && 'message' in fetcher.data && fetcher.data.message) ||
+        "Your message has been sent successfully!"
+      }
       onDismiss={() => setShowToast(false)}
+      duration={5000}
     />
   ) : null;
 
@@ -249,9 +271,27 @@ export default function Help() {
                     </Text>
                   </BlockStack>
 
-                  {actionData && 'error' in actionData && (
+                  {/* Success Banner */}
+                  {((actionData && 'success' in actionData && actionData.success) || 
+                    (fetcher.data && 'success' in fetcher.data && fetcher.data.success)) && (
+                    <Banner title="Message Sent Successfully!" tone="success">
+                      <Text as="p">
+                        {(actionData && 'message' in actionData && actionData.message) ||
+                         (fetcher.data && 'message' in fetcher.data && fetcher.data.message) ||
+                         "Your support request has been submitted successfully! We'll get back to you within 24 hours."}
+                      </Text>
+                    </Banner>
+                  )}
+
+                  {/* Error Banner */}
+                  {((actionData && 'error' in actionData) || 
+                    (fetcher.data && 'error' in fetcher.data)) && (
                     <Banner title="Error" tone="critical">
-                      <Text as="p">{actionData.error}</Text>
+                      <Text as="p">
+                        {(actionData && 'error' in actionData && actionData.error) ||
+                         (fetcher.data && 'error' in fetcher.data && fetcher.data.error) ||
+                         "An error occurred. Please try again."}
+                      </Text>
                     </Banner>
                   )}
 

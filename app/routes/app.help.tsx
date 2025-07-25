@@ -351,13 +351,13 @@ export default function Help() {
                       Quick Links
                     </Text>
                     <BlockStack gap="300">
-                      <Button variant="plain" url="/app/products" fullWidth textAlign="start">
+                      <Button variant="plain" url="products" fullWidth textAlign="start">
                         🚀 Optimize Products
                       </Button>
-                      <Button variant="plain" url="/app/pricing" fullWidth textAlign="start">
+                      <Button variant="plain" url="pricing" fullWidth textAlign="start">
                         💳 View Pricing Plans
                       </Button>
-                      <Button variant="plain" url="/app/dashboard" fullWidth textAlign="start">
+                      <Button variant="plain" url="dashboard" fullWidth textAlign="start">
                         📊 Account Dashboard
                       </Button>
                       <Divider />

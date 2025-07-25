@@ -151,6 +151,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const planName = formData.get("plan") as string;
 
   if (intent === "subscribe") {
+    console.log(`[BILLING] Subscribe request initiated:`, {
+      shop: session.shop,
+      planName,
+      isTest: process.env.NODE_ENV !== "production",
+      timestamp: new Date().toISOString()
+    });
+    
     try {
       // Map plan names to actual plan objects
       const planMap = {
@@ -161,26 +168,44 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const selectedPlan = planMap[planName as keyof typeof planMap];
       if (!selectedPlan) {
+        console.error(`[BILLING] Invalid plan selected:`, { planName, availablePlans: Object.keys(planMap) });
         return json({ error: "Invalid plan selected" }, { status: 400 });
       }
 
+      console.log(`[BILLING] Initiating billing request for plan:`, selectedPlan);
+      
       // billing.request throws a redirect response, it doesn't return
       await billing.request({
         plan: selectedPlan as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN,
         isTest: process.env.NODE_ENV !== "production",
-        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
+        returnUrl: `${process.env.SHOPIFY_APP_URL}/pricing?success=true`,
       });
 
+      console.log(`[BILLING] Billing request completed successfully`);
       // This line should never be reached due to the redirect above
       return json({ success: true });
     } catch (error) {
-      console.error("Billing error:", error);
+      console.error(`[BILLING] Billing request failed:`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        shop: session.shop,
+        planName,
+        timestamp: new Date().toISOString()
+      });
       return json({ error: "Failed to process subscription" }, { status: 400 });
     }
   }
 
   if (intent === "cancel") {
     const subscriptionId = formData.get("subscriptionId") as string;
+    
+    console.log(`[BILLING] Cancel request initiated:`, {
+      shop: session.shop,
+      subscriptionId,
+      isTest: process.env.NODE_ENV !== "production",
+      timestamp: new Date().toISOString()
+    });
+    
     try {
       await billing.cancel({
         subscriptionId,
@@ -188,8 +213,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         prorate: true,
       });
 
+      console.log(`[BILLING] Subscription cancelled successfully:`, { subscriptionId, shop: session.shop });
       return json({ success: true, message: "Subscription cancelled successfully" });
     } catch (error) {
+      console.error(`[BILLING] Subscription cancellation failed:`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        subscriptionId,
+        shop: session.shop,
+        timestamp: new Date().toISOString()
+      });
       return json({ error: "Failed to cancel subscription" }, { status: 400 });
     }
   }

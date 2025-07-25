@@ -361,7 +361,7 @@ export default function Help() {
                           💳 View Pricing Plans
                         </Button>
                       </Link>
-                      <Link to="/app/dashboard" style={{ textDecoration: 'none' }}>
+                      <Link to="/app" style={{ textDecoration: 'none' }}>
                         <Button variant="plain" fullWidth textAlign="start">
                           📊 Account Dashboard
                         </Button>

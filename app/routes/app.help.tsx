@@ -172,9 +172,30 @@ export default function Help() {
     }
   }, [actionData]);
 
+  // Helper function to safely get message from data
+  const getMessage = (data: any): string => {
+    if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
+      return data.message;
+    }
+    return "Your message has been sent successfully!";
+  };
+
+  // Helper function to safely check success
+  const checkSuccess = (data: any): boolean => {
+    return data && typeof data === 'object' && 'success' in data && data.success === true;
+  };
+
+  // Helper function to safely get error message
+  const getErrorMessage = (data: any): string => {
+    if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
+      return data.error;
+    }
+    return "An error occurred. Please try again.";
+  };
+
   // Also show success toast for fetcher submissions
   React.useEffect(() => {
-    if (fetcher.data && 'success' in fetcher.data && fetcher.data.success) {
+    if (checkSuccess(fetcher.data)) {
       setShowToast(true);
       // Reset form after successful submission
       setContactForm({
@@ -188,13 +209,13 @@ export default function Help() {
     }
   }, [fetcher.data]);
 
+  const isSuccessState = checkSuccess(actionData) || checkSuccess(fetcher.data);
+  const hasError = (actionData && typeof actionData === 'object' && 'error' in actionData) || 
+                  (fetcher.data && typeof fetcher.data === 'object' && 'error' in fetcher.data);
+
   const toastMarkup = showToast ? (
     <Toast
-      content={
-        (actionData && 'message' in actionData && actionData.message) ||
-        (fetcher.data && 'message' in fetcher.data && fetcher.data.message) ||
-        "Your message has been sent successfully!"
-      }
+      content={getMessage(actionData) || getMessage(fetcher.data)}
       onDismiss={() => setShowToast(false)}
       duration={5000}
     />
@@ -271,26 +292,11 @@ export default function Help() {
                     </Text>
                   </BlockStack>
 
-                  {/* Success Banner */}
-                  {((actionData && 'success' in actionData && actionData.success) || 
-                    (fetcher.data && 'success' in fetcher.data && fetcher.data.success)) && (
-                    <Banner title="Message Sent Successfully!" tone="success">
-                      <Text as="p">
-                        {(actionData && 'message' in actionData && actionData.message) ||
-                         (fetcher.data && 'message' in fetcher.data && fetcher.data.message) ||
-                         "Your support request has been submitted successfully! We'll get back to you within 24 hours."}
-                      </Text>
-                    </Banner>
-                  )}
-
-                  {/* Error Banner */}
-                  {((actionData && 'error' in actionData) || 
-                    (fetcher.data && 'error' in fetcher.data)) && (
+                 
+                  {Boolean(hasError) && (
                     <Banner title="Error" tone="critical">
                       <Text as="p">
-                        {(actionData && 'error' in actionData && actionData.error) ||
-                         (fetcher.data && 'error' in fetcher.data && fetcher.data.error) ||
-                         "An error occurred. Please try again."}
+                        {getErrorMessage(actionData) || getErrorMessage(fetcher.data)}
                       </Text>
                     </Banner>
                   )}
@@ -350,16 +356,17 @@ export default function Help() {
                       autoComplete="off"
                     />
 
-                    <InlineStack align="end">
-                      <Button
-                        variant="primary"
-                        onClick={handleSubmit}
-                        loading={isSubmitting}
-                        disabled={!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message}
-                      >
-                        Send Message
-                      </Button>
-                    </InlineStack>
+                                                              <InlineStack align="end">
+                        <Button
+                          variant="primary"
+                          onClick={handleSubmit}
+                          loading={isSubmitting}
+                          disabled={!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message}
+                          tone={isSuccessState ? "success" : undefined}
+                        >
+                          {isSuccessState ? "✓ Message Sent!" : "Send Message"}
+                        </Button>
+                      </InlineStack>
                   </FormLayout>
                 </BlockStack>
               </Box>

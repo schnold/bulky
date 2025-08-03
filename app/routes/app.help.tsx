@@ -228,30 +228,37 @@ export default function Help() {
 
         {toastMarkup}
 
+        {/* Header Section */}
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: '16px',
+            color: 'white'
+          }}
+        >
+          <Box padding="800">
+            <BlockStack gap="500" align="center">
+              <Box
+                padding="400"
+                borderRadius="full"
+                background="bg-surface-secondary"
+              >
+                <Icon source={QuestionCircleIcon} tone="base" />
+              </Box>
+              <Text variant="heading2xl" as="h1" alignment="center" tone="text-inverse">
+                How can we help you today?
+              </Text>
+              <Text variant="bodyLg" alignment="center" tone="text-inverse" as="p">
+                Get instant answers from our knowledge base or reach out to our support team.
+                <br />
+                We're here to help you succeed with AI-powered SEO optimization.
+              </Text>
+            </BlockStack>
+          </Box>
+        </div>
+
         <Box paddingBlockEnd="800">
           <BlockStack gap="800">
-            {/* Modern Hero Section */}
-            <Card>
-              <Box padding="800">
-                <BlockStack gap="600" align="center">
-                  <Box
-                    background="bg-surface-brand"
-                    padding="400"
-                    borderRadius="full"
-                  >
-                    <Icon source={QuestionCircleIcon} tone="base" />
-                  </Box>
-                  <BlockStack gap="300" align="center">
-                    <Text variant="heading2xl" as="h1" alignment="center">
-                      How can we help you today?
-                    </Text>
-                    <Text variant="bodyLg" tone="subdued" as="p" alignment="center" breakWord>
-                      Get instant answers from our knowledge base or reach out to our support team
-                    </Text>
-                  </BlockStack>
-                </BlockStack>
-              </Box>
-            </Card>
 
             {/* Quick Action Cards */}
             <BlockStack gap="500">

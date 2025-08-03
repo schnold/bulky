@@ -5,21 +5,16 @@ import { getUserByShop } from "../models/user.server";
 export async function requireBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
   const { session, billing } = await authenticate.admin(request);
   
-  try {
-    const billingCheck = await billing.require({
-      plans,
-      isTest: process.env.NODE_ENV !== "production",
-      onFailure: async () => {
-        // Redirect to pricing page if no active subscription
-        return redirect("/app/pricing");
-      },
-    });
+  const billingCheck = await billing.require({
+    plans,
+    isTest: process.env.NODE_ENV !== "production",
+    onFailure: async () => {
+      // Redirect to pricing page for plan selection when no subscription
+      throw redirect("/app/pricing");
+    },
+  });
 
-    return billingCheck;
-  } catch (error) {
-    // If billing check fails, redirect to pricing
-    throw redirect("/app/pricing");
-  }
+  return billingCheck;
 }
 
 export async function checkBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
@@ -71,6 +66,17 @@ export async function checkCreditsAndBilling(request: Request, requiredCredits: 
   }
 
   return { user, hasSubscription: await hasActiveSubscription(request) };
+}
+
+export async function requestBilling(request: Request, plan: typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN, returnUrl?: string) {
+  const { session, billing } = await authenticate.admin(request);
+  
+  // billing.request throws a redirect response, it doesn't return
+  await billing.request({
+    plan,
+    isTest: process.env.NODE_ENV !== "production",
+    returnUrl: returnUrl || `${process.env.SHOPIFY_APP_URL}/app?billing=success`,
+  });
 }
 
 export function getPlanLimits(planName: string) {

@@ -109,6 +109,7 @@ interface LoaderData {
     planName: string;
     status: string;
   } | null;
+  billingSuccess?: boolean;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -116,6 +117,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   const user = await ensureUserExists(session.shop);
+  const url = new URL(request.url);
+  const billingSuccess = url.searchParams.get("billing") === "success";
 
   // Check current billing status
   const billingCheck = await billing.check({
@@ -131,6 +134,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     : null;
 
+  // If billing was successful, log it
+  if (billingSuccess && currentSubscription) {
+    console.log(`[BILLING] Billing completed successfully for shop: ${session.shop}`, {
+      planName: currentSubscription.planName,
+      subscriptionId: currentSubscription.id,
+      timestamp: new Date().toISOString()
+    });
+  }
+
   return json<LoaderData>({
     user: {
       id: user.id,
@@ -139,6 +151,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       credits: user.credits,
     },
     currentSubscription,
+    billingSuccess,
   });
 };
 
@@ -178,7 +191,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       await billing.request({
         plan: selectedPlan as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN,
         isTest: process.env.NODE_ENV !== "production",
-        returnUrl: `${process.env.SHOPIFY_APP_URL}/pricing?success=true`,
+        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?billing=success`,
       });
 
       console.log(`[BILLING] Billing request completed successfully`);
@@ -408,7 +421,7 @@ const FAQItem = ({ question, answer, isOpen, onToggle }: {
 };
 
 export default function Pricing() {
-  const { user, currentSubscription } = useLoaderData<typeof loader>();
+  const { user, currentSubscription, billingSuccess } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [showToast, setShowToast] = useState(false);
@@ -524,7 +537,20 @@ export default function Pricing() {
                   Start free and scale as you grow.
                 </Text>
 
-                {currentSubscription && (
+                {billingSuccess && currentSubscription && (
+                  <Box paddingBlockStart="400">
+                    <Banner
+                      title="Subscription activated successfully!"
+                      tone="success"
+                    >
+                      <Text as="p">
+                        Welcome to {currentSubscription.planName}! You now have access to all premium features.
+                      </Text>
+                    </Banner>
+                  </Box>
+                )}
+
+                {currentSubscription && !billingSuccess && (
                   <Box paddingBlockStart="400">
                     <Banner
                       title={`Currently on ${currentSubscription.planName}`}

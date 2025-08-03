@@ -97,16 +97,19 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   billing: {
     [STARTER_PLAN]: {
+      name: "Starter Plan",
       amount: 9.99,
       currencyCode: "USD",
       interval: BillingInterval.Every30Days,
     },
     [PRO_PLAN]: {
+      name: "Pro Plan",
       amount: 29.99,
       currencyCode: "USD",
       interval: BillingInterval.Every30Days,
     },
     [ENTERPRISE_PLAN]: {
+      name: "Enterprise Plan",
       amount: 59.99,
       currencyCode: "USD",
       interval: BillingInterval.Every30Days,

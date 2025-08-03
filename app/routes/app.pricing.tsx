@@ -167,6 +167,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       console.log(`[BILLING] Initiating billing request for plan:`, planName);
+      console.log(`[BILLING] Environment check:`, {
+        nodeEnv: process.env.NODE_ENV,
+        isTest: process.env.NODE_ENV !== "production",
+        shopifyAppUrl: process.env.SHOPIFY_APP_URL,
+        returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`
+      });
       
       // billing.request throws a redirect response, it doesn't return
       await (billing.request as any)({

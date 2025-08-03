@@ -9,7 +9,7 @@ export async function requireBilling(request: Request, plans: (typeof STARTER_PL
     const billingCheck = await (billing.require as any)({
       
       plans,
-      isTest: true, // Always use test mode during development
+      isTest: process.env.NODE_ENV !== "production",
       onFailure: async () => {
         // Redirect to pricing page if no active subscription
         return redirect("/app/pricing");

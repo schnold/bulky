@@ -35,7 +35,7 @@ api_version = "2025-01"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,read_products,read_product_listings,write_product_listings"
+scopes = "write_products,read_products,read_product_listings,write_product_listings,write_apps"
 
 [auth]
 redirect_urls = ["https://b1-bulk-product-seo-enhancer.netlify.app/auth/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/auth/shopify/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/api/auth/callback"]

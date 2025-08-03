@@ -113,55 +113,79 @@ interface LoaderData {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
-  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
+  try {
+    const { session, billing } = await authenticate.admin(request);
+    console.log(`[PRICING] Loader called for shop: ${session.shop}`);
+    
+    const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
-  const user = await ensureUserExists(session.shop);
-  const url = new URL(request.url);
-  const billingSuccess = url.searchParams.get("billing") === "success";
+    const user = await ensureUserExists(session.shop);
+    console.log(`[PRICING] User loaded: ${user.id} for shop: ${user.shop}`);
+    
+    const url = new URL(request.url);
+    const billingSuccess = url.searchParams.get("billing") === "success";
 
-  // Check current billing status
-  const billingCheck = await billing.check({
-    plans: [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN],
-    isTest: process.env.NODE_ENV !== "production",
-  });
+    // Check current billing status
+    console.log(`[PRICING] Checking billing status for plans: ${[STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]}`);
+    console.log(`[PRICING] Using test mode: ${process.env.NODE_ENV !== "production"}`);
+    
+    let currentSubscription = null;
+    try {
+      const billingCheck = await billing.check({
+        plans: [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN],
+        isTest: process.env.NODE_ENV !== "production",
+      });
 
-  const currentSubscription = billingCheck.appSubscriptions.length > 0
-    ? {
-      id: billingCheck.appSubscriptions[0].id,
-      planName: billingCheck.appSubscriptions[0].name,
-      status: "active",
+      currentSubscription = billingCheck.appSubscriptions.length > 0
+        ? {
+          id: billingCheck.appSubscriptions[0].id,
+          planName: billingCheck.appSubscriptions[0].name,
+          status: "active",
+        }
+        : null;
+    } catch (billingError) {
+      console.error(`[PRICING] Billing check failed:`, billingError);
+      // Continue without subscription info - user will see free plan
+      currentSubscription = null;
     }
-    : null;
 
-  // If billing was successful, log it
-  if (billingSuccess && currentSubscription) {
-    console.log(`[BILLING] Billing completed successfully for shop: ${session.shop}`, {
-      planName: currentSubscription.planName,
-      subscriptionId: currentSubscription.id,
-      timestamp: new Date().toISOString()
+    console.log(`[PRICING] Current subscription:`, currentSubscription);
+
+    // If billing was successful, log it
+    if (billingSuccess && currentSubscription) {
+      console.log(`[BILLING] Billing completed successfully for shop: ${session.shop}`, {
+        planName: currentSubscription.planName,
+        subscriptionId: currentSubscription.id,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return json<LoaderData>({
+      user: {
+        id: user.id,
+        shop: user.shop,
+        plan: user.plan,
+        credits: user.credits,
+      },
+      currentSubscription,
+      billingSuccess,
     });
+  } catch (error) {
+    console.error(`[PRICING] Loader error:`, error);
+    throw error;
   }
-
-  return json<LoaderData>({
-    user: {
-      id: user.id,
-      shop: user.shop,
-      plan: user.plan,
-      credits: user.credits,
-    },
-    currentSubscription,
-    billingSuccess,
-  });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
-  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
+  try {
+    const { session, billing } = await authenticate.admin(request);
+    const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-  const planName = formData.get("plan") as string;
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+    const planName = formData.get("plan") as string;
+    
+    console.log(`[PRICING] Action called: intent=${intent}, plan=${planName}, shop=${session.shop}`);
 
   if (intent === "subscribe") {
     console.log(`[BILLING] Subscribe request initiated:`, {
@@ -241,6 +265,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   return json({ error: "Invalid action" }, { status: 400 });
+  } catch (error) {
+    console.error(`[PRICING] Action error:`, error);
+    return json({ error: "Server error occurred" }, { status: 500 });
+  }
 };
 
 const FeatureIcon = ({ included }: { included: boolean | string }) => {

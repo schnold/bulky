@@ -95,26 +95,7 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new LoggingPrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
-  billing: {
-    [STARTER_PLAN]: {
-      name: "Starter Plan",
-      amount: 9.99,
-      currencyCode: "USD",
-      interval: BillingInterval.Every30Days,
-    },
-    [PRO_PLAN]: {
-      name: "Pro Plan",
-      amount: 29.99,
-      currencyCode: "USD",
-      interval: BillingInterval.Every30Days,
-    },
-    [ENTERPRISE_PLAN]: {
-      name: "Enterprise Plan",
-      amount: 59.99,
-      currencyCode: "USD",
-      interval: BillingInterval.Every30Days,
-    },
-  },
+  // Billing handled manually via GraphQL mutations to avoid restricted scopes
   webhooks: {
     APP_SUBSCRIPTIONS_UPDATE: {
       deliveryMethod: DeliveryMethod.Http,

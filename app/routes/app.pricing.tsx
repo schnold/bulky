@@ -112,24 +112,46 @@ interface LoaderData {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   const user = await ensureUserExists(session.shop);
 
-  // Check current billing status
-  const billingCheck = await (billing.check as any)({
-    plans: [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN],
-    isTest: process.env.NODE_ENV !== "production",
-  });
-
-  const currentSubscription = billingCheck.appSubscriptions.length > 0
-    ? {
-      id: billingCheck.appSubscriptions[0].id,
-      planName: billingCheck.appSubscriptions[0].name,
-      status: "active",
+  // Check current billing status using manual GraphQL
+  let currentSubscription = null;
+  try {
+    const { admin } = await authenticate.admin(request);
+    const query = `
+      query {
+        currentAppInstallation {
+          activeSubscriptions {
+            id
+            name
+            status
+            currentPeriodEnd
+            test
+          }
+        }
+      }
+    `;
+    
+    const response = await admin.graphql(query);
+    const data = await response.json();
+    
+    console.log('[BILLING] Current subscriptions check:', JSON.stringify(data, null, 2));
+    
+    const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
+    if (subscriptions.length > 0) {
+      const activeSubscription = subscriptions[0];
+      currentSubscription = {
+        id: activeSubscription.id,
+        planName: activeSubscription.name,
+        status: activeSubscription.status,
+      };
     }
-    : null;
+  } catch (error) {
+    console.error('[BILLING] Error checking subscriptions:', error);
+  }
 
   return json<LoaderData>({
     user: {
@@ -143,7 +165,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   const formData = await request.formData();
@@ -174,12 +196,78 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`
       });
       
-      // billing.request throws a redirect response, it doesn't return
-      await (billing.request as any)({
-        plan: planName,
-        isTest: process.env.NODE_ENV !== "production",
-        returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`,
-      });
+      // Use manual GraphQL billing implementation (no restricted scopes needed)
+      console.log(`[BILLING] Using manual GraphQL billing approach`);
+      try {
+        
+        // Manual GraphQL billing implementation
+        const { admin } = await authenticate.admin(request);
+        const { PLAN_CONFIGS } = await import("../shopify.server");
+        const planConfig = PLAN_CONFIGS[planName];
+        
+        if (!planConfig) {
+          throw new Error(`Plan configuration not found for: ${planName}`);
+        }
+        
+        const mutation = `
+          mutation appSubscriptionCreate($name: String!, $returnUrl: URL!, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
+            appSubscriptionCreate(name: $name, returnUrl: $returnUrl, test: $test, lineItems: $lineItems) {
+              userErrors {
+                field
+                message
+              }
+              confirmationUrl
+              appSubscription {
+                id
+                name
+                status
+              }
+            }
+          }
+        `;
+        
+        const variables = {
+          name: planConfig.name,
+          returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`,
+          test: process.env.NODE_ENV !== "production",
+          lineItems: [{
+            plan: {
+              appRecurringPricingDetails: {
+                price: { amount: planConfig.amount, currencyCode: planConfig.currencyCode },
+                interval: planConfig.interval
+              }
+            }
+          }]
+        };
+        
+        console.log(`[BILLING] Manual GraphQL mutation variables:`, JSON.stringify(variables, null, 2));
+        
+        const response = await admin.graphql(mutation, { variables });
+        const data = await response.json();
+        
+        console.log(`[BILLING] Manual GraphQL response:`, JSON.stringify(data, null, 2));
+        
+        if (data.errors) {
+          throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+        }
+        
+        const result = data.data?.appSubscriptionCreate;
+        if (result?.userErrors?.length > 0) {
+          throw new Error(`Subscription creation errors: ${JSON.stringify(result.userErrors)}`);
+        }
+        
+        if (result?.confirmationUrl) {
+          console.log(`[BILLING] Manual billing successful, redirecting to:`, result.confirmationUrl);
+          throw new Response(null, {
+            status: 302,
+            headers: {
+              Location: result.confirmationUrl,
+            },
+          });
+        } else {
+          throw new Error('No confirmation URL returned from Shopify');
+        }
+      }
 
       console.log(`[BILLING] Billing request completed successfully`);
       // This line should never be reached due to the redirect above

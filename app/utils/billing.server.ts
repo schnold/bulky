@@ -3,34 +3,51 @@ import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopif
 import { getUserByShop } from "../models/user.server";
 
 export async function requireBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
-  const { session, billing } = await authenticate.admin(request);
+  const hasActiveSubscription = await hasActiveSubscription(request);
   
-  try {
-    const billingCheck = await (billing.require as any)({
-      
-      plans,
-      isTest: process.env.NODE_ENV !== "production",
-      onFailure: async () => {
-        // Redirect to pricing page if no active subscription
-        return redirect("/app/pricing");
-      },
-    });
-
-    return billingCheck;
-  } catch (error) {
-    // If billing check fails, redirect to pricing
+  if (!hasActiveSubscription) {
+    // Redirect to pricing page if no active subscription
     throw redirect("/app/pricing");
   }
+  
+  return { hasActivePayment: true };
 }
 
 export async function checkBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
-  const { session, billing } = await authenticate.admin(request);
-  const billingCheck = await (billing.check as any)({
-    plans,
-    isTest: process.env.NODE_ENV !== "production",
-  });
-
-  return billingCheck;
+  const { admin } = await authenticate.admin(request);
+  
+  try {
+    const query = `
+      query {
+        currentAppInstallation {
+          activeSubscriptions {
+            id
+            name
+            status
+            currentPeriodEnd
+            test
+          }
+        }
+      }
+    `;
+    
+    const response = await admin.graphql(query);
+    const data = await response.json();
+    
+    const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
+    const hasActivePayment = subscriptions.length > 0;
+    
+    return {
+      hasActivePayment,
+      appSubscriptions: subscriptions
+    };
+  } catch (error) {
+    console.error('Error checking billing:', error);
+    return {
+      hasActivePayment: false,
+      appSubscriptions: []
+    };
+  }
 }
 
 export async function hasActiveSubscription(request: Request): Promise<boolean> {

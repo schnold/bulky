@@ -199,11 +199,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log(`[PRICING] Action called with method: ${request.method}, URL: ${request.url}`);
   
   try {
+    console.log(`[PRICING] Starting authentication...`);
     const { session, admin } = await authenticate.admin(request);
     console.log(`[PRICING] Authentication successful for shop: ${session.shop}`);
     
+    console.log(`[PRICING] Importing plan configurations...`);
     const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN, PLAN_CONFIGS } = await import("../shopify.server");
+    console.log(`[PRICING] Plan configs imported:`, Object.keys(PLAN_CONFIGS));
 
+    console.log(`[PRICING] Reading form data...`);
     const formData = await request.formData();
     const intent = formData.get("intent");
     const planName = formData.get("plan") as string;
@@ -212,7 +216,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       intent,
       planName,
       shop: session.shop,
-      allFormKeys: Array.from(formData.keys())
+      allFormKeys: Array.from(formData.keys()),
+      allFormEntries: Array.from(formData.entries())
     });
 
   if (intent === "subscribe") {
@@ -240,7 +245,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log(`[BILLING] Plan configuration:`, planConfig);
     
     try {
-      // Create app subscription using GraphQL mutation
+      console.log(`[BILLING] Environment check:`, {
+        NODE_ENV: process.env.NODE_ENV,
+        SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL,
+        isTest: process.env.NODE_ENV !== "production"
+      });
+      
+      const variables = {
+        name: planConfig.name,
+        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?billing=success`,
+        test: true, // Always use test mode for now to avoid real charges
+        lineItems: [
+          {
+            plan: {
+              appRecurringPricingDetails: {
+                price: {
+                  amount: planConfig.amount,
+                  currencyCode: planConfig.currencyCode
+                },
+                interval: planConfig.interval
+              }
+            }
+          }
+        ]
+      };
+      
+      console.log(`[BILLING] GraphQL variables:`, JSON.stringify(variables, null, 2));
+      
+      // Create app subscription using GraphQL mutation (matching official docs exactly)
       const response = await admin.graphql(
         `#graphql
         mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
@@ -251,36 +283,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
             appSubscription {
               id
-              name
-              status
             }
             confirmationUrl
           }
         }`,
         {
-          variables: {
-            name: planConfig.name,
-            returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?billing=success`,
-            test: process.env.NODE_ENV !== "production",
-            lineItems: [
-              {
-                plan: {
-                  appRecurringPricingDetails: {
-                    price: {
-                      amount: planConfig.amount,
-                      currencyCode: planConfig.currencyCode
-                    },
-                    interval: planConfig.interval
-                  }
-                }
-              }
-            ]
-          }
+          variables
         }
       );
 
+      console.log(`[BILLING] GraphQL response status:`, response.status);
+      console.log(`[BILLING] GraphQL response headers:`, Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        console.error(`[BILLING] GraphQL request failed with status:`, response.status);
+        const errorText = await response.text();
+        console.error(`[BILLING] Error response body:`, errorText);
+        return json({ error: `GraphQL request failed: ${response.status}` }, { status: 500 });
+      }
+
       const responseJson = await response.json();
       console.log(`[BILLING] GraphQL response:`, JSON.stringify(responseJson, null, 2));
+
+      if (responseJson.errors) {
+        console.error(`[BILLING] GraphQL errors:`, responseJson.errors);
+        return json({ 
+          error: `GraphQL error: ${responseJson.errors[0]?.message || 'Unknown error'}` 
+        }, { status: 400 });
+      }
+
+      if (!responseJson.data) {
+        console.error(`[BILLING] No data in GraphQL response`);
+        return json({ error: "No data received from GraphQL" }, { status: 500 });
+      }
 
       const { appSubscriptionCreate } = responseJson.data;
       

@@ -12,7 +12,7 @@ include_config_on_deploy = true
 automatically_update_urls_on_dev = false
 
 [webhooks]
-api_version = "2025-07"
+api_version = "2025-01"
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
@@ -21,6 +21,10 @@ api_version = "2025-07"
   [[webhooks.subscriptions]]
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app_subscriptions/update" ]
+  uri = "/webhooks/app-subscriptions/update"
 
   # Mandatory compliance webhooks for Shopify App Store
   [[webhooks.subscriptions]]
@@ -31,7 +35,7 @@ api_version = "2025-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "write_products,read_products,read_product_listings,write_product_listings"
 
 [auth]
 redirect_urls = ["https://b1-bulk-product-seo-enhancer.netlify.app/auth/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/auth/shopify/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/api/auth/callback"]

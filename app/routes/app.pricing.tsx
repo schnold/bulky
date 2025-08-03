@@ -171,7 +171,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // billing.request throws a redirect response, it doesn't return
       await (billing.request as any)({
         plan: planName,
-        isTest: true, // Always use test mode to avoid charges during development
+        isTest: process.env.NODE_ENV !== "production",
         returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`,
       });
 
@@ -203,7 +203,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     try {
       await billing.cancel({
         subscriptionId,
-        isTest: true, // Always use test mode to avoid charges during development
+        isTest: process.env.NODE_ENV !== "production",
         prorate: true,
       });
 
@@ -409,11 +409,16 @@ export default function Pricing() {
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
 
   // Import plan constants for consistency
-  const IMPORTED_STARTER_PLAN = "Starter Plan";
-  const IMPORTED_PRO_PLAN = "Pro Plan";
-  const IMPORTED_ENTERPRISE_PLAN = "Enterprise Plan";
+  const IMPORTED_STARTER_PLAN = "starter_plan";
+  const IMPORTED_PRO_PLAN = "pro_plan";
+  const IMPORTED_ENTERPRISE_PLAN = "enterprise_plan";
 
   const isLoading = navigation.state === "submitting";
+
+  // Helper function to check if current plan matches
+  const isCurrentPlan = (planKey: string) => {
+    return currentSubscription?.planName === planKey;
+  };
 
   const faqData = [
     {
@@ -566,7 +571,7 @@ export default function Pricing() {
                   features={planFeatures.map(f => f.starter)}
                   buttonText="Get Started"
                   buttonVariant="secondary"
-                  isCurrentPlan={currentSubscription?.planName === IMPORTED_STARTER_PLAN}
+                  isCurrentPlan={isCurrentPlan(IMPORTED_STARTER_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_STARTER_PLAN)}
                   loading={isLoading}
                 />
@@ -582,7 +587,7 @@ export default function Pricing() {
                   buttonText="Get Started"
                   buttonVariant="primary"
                   isPopular={true}
-                  isCurrentPlan={currentSubscription?.planName === IMPORTED_PRO_PLAN}
+                  isCurrentPlan={isCurrentPlan(IMPORTED_PRO_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_PRO_PLAN)}
                   loading={isLoading}
                 />
@@ -597,7 +602,7 @@ export default function Pricing() {
                   features={planFeatures.map(f => f.enterprise)}
                   buttonText="Contact Sales"
                   buttonVariant="secondary"
-                  isCurrentPlan={currentSubscription?.planName === IMPORTED_ENTERPRISE_PLAN}
+                  isCurrentPlan={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_ENTERPRISE_PLAN)}
                   loading={isLoading}
                 />

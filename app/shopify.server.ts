@@ -57,9 +57,9 @@ const getAppUrl = () => {
 };
 
 // Define billing plans
-export const STARTER_PLAN = "Starter Plan";
-export const PRO_PLAN = "Pro Plan";
-export const ENTERPRISE_PLAN = "Enterprise Plan";
+export const STARTER_PLAN = "starter_plan";
+export const PRO_PLAN = "pro_plan";
+export const ENTERPRISE_PLAN = "enterprise_plan";
 
 // Plan configurations for GraphQL API
 export const PLAN_CONFIGS = {

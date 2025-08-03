@@ -109,79 +109,27 @@ interface LoaderData {
     planName: string;
     status: string;
   } | null;
-  billingSuccess?: boolean;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
-  console.log(`[PRICING] Loader called for shop: ${session.shop}`);
+  const { session, billing } = await authenticate.admin(request);
+  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   const user = await ensureUserExists(session.shop);
-  console.log(`[PRICING] User loaded: ${user.id} for shop: ${user.shop}`);
-  
-  const url = new URL(request.url);
-  const billingSuccess = url.searchParams.get("billing") === "success";
 
-  // Check current app subscriptions using GraphQL
-  let currentSubscription = null;
-  try {
-    const response = await admin.graphql(
-      `#graphql
-      query GetAppSubscriptions {
-        currentAppInstallation {
-          activeSubscriptions {
-            id
-            name
-            status
-            createdAt
-            test
-            lineItems {
-              plan {
-                pricingDetails {
-                  ... on AppRecurringPricing {
-                    price {
-                      amount
-                      currencyCode
-                    }
-                    interval
-                  }
-                }
-              }
-            }
-          }
-        }
-      }`
-    );
+  // Check current billing status
+  const billingCheck = await (billing.check as any)({
+    plans: [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN],
+    isTest: process.env.NODE_ENV !== "production",
+  });
 
-    const responseJson = await response.json();
-    console.log(`[PRICING] Subscription check response:`, JSON.stringify(responseJson, null, 2));
-
-    const activeSubscriptions = responseJson.data?.currentAppInstallation?.activeSubscriptions || [];
-    
-    if (activeSubscriptions.length > 0) {
-      const subscription = activeSubscriptions[0]; // Get the first active subscription
-      currentSubscription = {
-        id: subscription.id,
-        planName: subscription.name,
-        status: subscription.status,
-      };
+  const currentSubscription = billingCheck.appSubscriptions.length > 0
+    ? {
+      id: billingCheck.appSubscriptions[0].id,
+      planName: billingCheck.appSubscriptions[0].name,
+      status: "active",
     }
-  } catch (error) {
-    console.error(`[PRICING] Failed to check subscriptions:`, error);
-    // Continue without subscription info - user will see free plan
-    currentSubscription = null;
-  }
-
-  console.log(`[PRICING] Current subscription:`, currentSubscription);
-
-  // If billing was successful, log it
-  if (billingSuccess && currentSubscription) {
-    console.log(`[BILLING] Billing completed successfully for shop: ${session.shop}`, {
-      planName: currentSubscription.planName,
-      subscriptionId: currentSubscription.id,
-      timestamp: new Date().toISOString()
-    });
-  }
+    : null;
 
   return json<LoaderData>({
     user: {
@@ -191,34 +139,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       credits: user.credits,
     },
     currentSubscription,
-    billingSuccess,
   });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  console.log(`[PRICING] Action called with method: ${request.method}, URL: ${request.url}`);
-  
-  try {
-    console.log(`[PRICING] Starting authentication...`);
-    const { session, admin } = await authenticate.admin(request);
-    console.log(`[PRICING] Authentication successful for shop: ${session.shop}`);
-    
-    console.log(`[PRICING] Importing plan configurations...`);
-    const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN, PLAN_CONFIGS } = await import("../shopify.server");
-    console.log(`[PRICING] Plan configs imported:`, Object.keys(PLAN_CONFIGS));
+  const { session, billing } = await authenticate.admin(request);
+  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
-    console.log(`[PRICING] Reading form data...`);
-    const formData = await request.formData();
-    const intent = formData.get("intent");
-    const planName = formData.get("plan") as string;
-    
-    console.log(`[PRICING] Form data received:`, {
-      intent,
-      planName,
-      shop: session.shop,
-      allFormKeys: Array.from(formData.keys()),
-      allFormEntries: Array.from(formData.entries())
-    });
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+  const planName = formData.get("plan") as string;
 
   if (intent === "subscribe") {
     console.log(`[BILLING] Subscribe request initiated:`, {
@@ -228,126 +158,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp: new Date().toISOString()
     });
     
-    if (!planName) {
-      console.error(`[BILLING] No plan name provided`);
-      return json({ error: "Plan name is required" }, { status: 400 });
-    }
-    
-    const planConfig = PLAN_CONFIGS[planName as keyof typeof PLAN_CONFIGS];
-    if (!planConfig) {
-      console.error(`[BILLING] Invalid plan selected:`, { 
-        planName, 
-        availablePlans: Object.keys(PLAN_CONFIGS)
-      });
-      return json({ error: "Invalid plan selected" }, { status: 400 });
-    }
-
-    console.log(`[BILLING] Plan configuration:`, planConfig);
-    
     try {
-      console.log(`[BILLING] Environment check:`, {
-        NODE_ENV: process.env.NODE_ENV,
-        SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL,
-        isTest: process.env.NODE_ENV !== "production"
-      });
+      // Import PLAN_CONFIGS to get the actual plan objects
+      const { PLAN_CONFIGS } = await import("../shopify.server");
+
+      const selectedPlan = PLAN_CONFIGS[planName as keyof typeof PLAN_CONFIGS];
+      if (!selectedPlan) {
+        console.error(`[BILLING] Invalid plan selected:`, { planName, availablePlans: Object.keys(PLAN_CONFIGS) });
+        return json({ error: "Invalid plan selected" }, { status: 400 });
+      }
+
+      console.log(`[BILLING] Initiating billing request for plan:`, selectedPlan);
       
-      const variables = {
-        name: planConfig.name,
-        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?billing=success`,
-        test: true, // Always use test mode for now to avoid real charges
-        lineItems: [
-          {
-            plan: {
-              appRecurringPricingDetails: {
-                price: {
-                  amount: planConfig.amount,
-                  currencyCode: planConfig.currencyCode
-                },
-                interval: planConfig.interval
-              }
-            }
-          }
-        ]
-      };
-      
-      console.log(`[BILLING] GraphQL variables:`, JSON.stringify(variables, null, 2));
-      
-      // Create app subscription using GraphQL mutation (matching official docs exactly)
-      const response = await admin.graphql(
-        `#graphql
-        mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
-          appSubscriptionCreate(name: $name, returnUrl: $returnUrl, lineItems: $lineItems, test: $test) {
-            userErrors {
-              field
-              message
-            }
-            appSubscription {
-              id
-            }
-            confirmationUrl
-          }
-        }`,
-        {
-          variables
-        }
-      );
-
-      console.log(`[BILLING] GraphQL response status:`, response.status);
-      console.log(`[BILLING] GraphQL response headers:`, Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        console.error(`[BILLING] GraphQL request failed with status:`, response.status);
-        const errorText = await response.text();
-        console.error(`[BILLING] Error response body:`, errorText);
-        return json({ error: `GraphQL request failed: ${response.status}` }, { status: 500 });
-      }
-
-      const responseJson = await response.json();
-      console.log(`[BILLING] GraphQL response:`, JSON.stringify(responseJson, null, 2));
-
-      if (responseJson.errors) {
-        console.error(`[BILLING] GraphQL errors:`, responseJson.errors);
-        return json({ 
-          error: `GraphQL error: ${responseJson.errors[0]?.message || 'Unknown error'}` 
-        }, { status: 400 });
-      }
-
-      if (!responseJson.data) {
-        console.error(`[BILLING] No data in GraphQL response`);
-        return json({ error: "No data received from GraphQL" }, { status: 500 });
-      }
-
-      const { appSubscriptionCreate } = responseJson.data;
-      
-      if (appSubscriptionCreate.userErrors && appSubscriptionCreate.userErrors.length > 0) {
-        console.error(`[BILLING] Subscription creation failed:`, appSubscriptionCreate.userErrors);
-        return json({ 
-          error: `Failed to create subscription: ${appSubscriptionCreate.userErrors[0].message}` 
-        }, { status: 400 });
-      }
-
-      if (!appSubscriptionCreate.confirmationUrl) {
-        console.error(`[BILLING] No confirmation URL received`);
-        return json({ error: "Failed to get confirmation URL" }, { status: 400 });
-      }
-
-      console.log(`[BILLING] Subscription created successfully:`, {
-        subscriptionId: appSubscriptionCreate.appSubscription?.id,
-        confirmationUrl: appSubscriptionCreate.confirmationUrl
+      // billing.request throws a redirect response, it doesn't return
+      await (billing.request as any)({
+        plan: selectedPlan,
+        isTest: process.env.NODE_ENV !== "production",
+        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
       });
 
-      // Redirect to Shopify's confirmation page
-      return redirect(appSubscriptionCreate.confirmationUrl);
-      
+      console.log(`[BILLING] Billing request completed successfully`);
+      // This line should never be reached due to the redirect above
+      return json({ success: true });
     } catch (error) {
-      console.error(`[BILLING] Subscription creation failed:`, {
+      console.error(`[BILLING] Billing request failed:`, {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         shop: session.shop,
         planName,
         timestamp: new Date().toISOString()
       });
-      return json({ error: "Failed to process subscription" }, { status: 500 });
+      return json({ error: "Failed to process subscription" }, { status: 400 });
     }
   }
 
@@ -357,55 +198,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log(`[BILLING] Cancel request initiated:`, {
       shop: session.shop,
       subscriptionId,
+      isTest: process.env.NODE_ENV !== "production",
       timestamp: new Date().toISOString()
     });
     
-    if (!subscriptionId) {
-      return json({ error: "Subscription ID is required" }, { status: 400 });
-    }
-    
     try {
-      const response = await admin.graphql(
-        `#graphql
-        mutation AppSubscriptionCancel($id: ID!) {
-          appSubscriptionCancel(id: $id) {
-            userErrors {
-              field
-              message
-            }
-            appSubscription {
-              id
-              status
-            }
-          }
-        }`,
-        {
-          variables: {
-            id: subscriptionId
-          }
-        }
-      );
-
-      const responseJson = await response.json();
-      console.log(`[BILLING] Cancel response:`, JSON.stringify(responseJson, null, 2));
-
-      const { appSubscriptionCancel } = responseJson.data;
-      
-      if (appSubscriptionCancel.userErrors && appSubscriptionCancel.userErrors.length > 0) {
-        console.error(`[BILLING] Subscription cancellation failed:`, appSubscriptionCancel.userErrors);
-        return json({ 
-          error: `Failed to cancel subscription: ${appSubscriptionCancel.userErrors[0].message}` 
-        }, { status: 400 });
-      }
-
-      console.log(`[BILLING] Subscription cancelled successfully:`, { 
-        subscriptionId, 
-        shop: session.shop,
-        newStatus: appSubscriptionCancel.appSubscription?.status 
+      await billing.cancel({
+        subscriptionId,
+        isTest: process.env.NODE_ENV !== "production",
+        prorate: true,
       });
-      
+
+      console.log(`[BILLING] Subscription cancelled successfully:`, { subscriptionId, shop: session.shop });
       return json({ success: true, message: "Subscription cancelled successfully" });
-      
     } catch (error) {
       console.error(`[BILLING] Subscription cancellation failed:`, {
         error: error instanceof Error ? error.message : String(error),
@@ -414,21 +219,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop: session.shop,
         timestamp: new Date().toISOString()
       });
-      return json({ error: "Failed to cancel subscription" }, { status: 500 });
+      return json({ error: "Failed to cancel subscription" }, { status: 400 });
     }
   }
 
   return json({ error: "Invalid action" }, { status: 400 });
-  } catch (error) {
-    console.error(`[PRICING] Action error:`, error);
-    
-    // If it's a Response object (redirect), rethrow it
-    if (error instanceof Response) {
-      throw error;
-    }
-    
-    return json({ error: "Server error occurred" }, { status: 500 });
-  }
 };
 
 const FeatureIcon = ({ included }: { included: boolean | string }) => {
@@ -609,7 +404,7 @@ const FAQItem = ({ question, answer, isOpen, onToggle }: {
 };
 
 export default function Pricing() {
-  const { user, currentSubscription, billingSuccess } = useLoaderData<typeof loader>();
+  const { user, currentSubscription } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [showToast, setShowToast] = useState(false);
@@ -725,20 +520,7 @@ export default function Pricing() {
                   Start free and scale as you grow.
                 </Text>
 
-                {billingSuccess && currentSubscription && (
-                  <Box paddingBlockStart="400">
-                    <Banner
-                      title="Subscription activated successfully!"
-                      tone="success"
-                    >
-                      <Text as="p">
-                        Welcome to {currentSubscription.planName}! You now have access to all premium features.
-                      </Text>
-                    </Banner>
-                  </Box>
-                )}
-
-                {currentSubscription && !billingSuccess && (
+                {currentSubscription && (
                   <Box paddingBlockStart="400">
                     <Banner
                       title={`Currently on ${currentSubscription.planName}`}

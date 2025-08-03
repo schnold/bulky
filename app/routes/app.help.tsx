@@ -238,13 +238,19 @@ export default function Help() {
         >
           <Box padding="800">
             <BlockStack gap="500" align="center">
-              <Box
-                padding="400"
-                borderRadius="full"
-                background="bg-surface-secondary"
-              >
-                <Icon source={QuestionCircleIcon} tone="base" />
-              </Box>
+                             <div
+                 style={{
+                   padding: '16px',
+                   borderRadius: '50%',
+                   background: 'rgba(255, 255, 255, 0.2)',
+                   backdropFilter: 'blur(10px)',
+                   display: 'flex',
+                   alignItems: 'center',
+                   justifyContent: 'center'
+                 }}
+               >
+                 <Icon source={QuestionCircleIcon} tone="base" />
+               </div>
               <Text variant="heading2xl" as="h1" alignment="center" tone="text-inverse">
                 How can we help you today?
               </Text>

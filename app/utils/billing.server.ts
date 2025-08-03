@@ -1,83 +1,54 @@
 import { redirect } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopify.server";
 import { getUserByShop } from "../models/user.server";
+
+export async function requireBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
+  const { session, billing } = await authenticate.admin(request);
+  
+  try {
+    const billingCheck = await (billing.require as any)({
+      
+      plans,
+      isTest: process.env.NODE_ENV !== "production",
+      onFailure: async () => {
+        // Redirect to pricing page if no active subscription
+        return redirect("/app/pricing");
+      },
+    });
+
+    return billingCheck;
+  } catch (error) {
+    // If billing check fails, redirect to pricing
+    throw redirect("/app/pricing");
+  }
+}
+
+export async function checkBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
+  const { session, billing } = await authenticate.admin(request);
+  const billingCheck = await (billing.check as any)({
+    plans,
+    isTest: process.env.NODE_ENV !== "production",
+  });
+
+  return billingCheck;
+}
 
 export async function hasActiveSubscription(request: Request): Promise<boolean> {
   try {
-    const { admin } = await authenticate.admin(request);
-    
-    const response = await admin.graphql(
-      `#graphql
-      query GetAppSubscriptions {
-        currentAppInstallation {
-          activeSubscriptions {
-            id
-            status
-          }
-        }
-      }`
-    );
-
-    const responseJson = await response.json();
-    const activeSubscriptions = responseJson.data?.currentAppInstallation?.activeSubscriptions || [];
-    
-    return activeSubscriptions.length > 0;
+    const billingCheck = await checkBilling(request);
+    return billingCheck.hasActivePayment;
   } catch (error) {
-    console.error("Error checking subscription:", error);
     return false;
   }
 }
 
 export async function getCurrentSubscription(request: Request) {
   try {
-    const { admin } = await authenticate.admin(request);
-    
-    const response = await admin.graphql(
-      `#graphql
-      query GetAppSubscriptions {
-        currentAppInstallation {
-          activeSubscriptions {
-            id
-            name
-            status
-            createdAt
-            test
-            lineItems {
-              plan {
-                pricingDetails {
-                  ... on AppRecurringPricing {
-                    price {
-                      amount
-                      currencyCode
-                    }
-                    interval
-                  }
-                }
-              }
-            }
-          }
-        }
-      }`
-    );
-
-    const responseJson = await response.json();
-    const activeSubscriptions = responseJson.data?.currentAppInstallation?.activeSubscriptions || [];
-    
-    return activeSubscriptions.length > 0 ? activeSubscriptions[0] : null;
+    const billingCheck = await checkBilling(request);
+    return billingCheck.appSubscriptions.length > 0 ? billingCheck.appSubscriptions[0] : null;
   } catch (error) {
-    console.error("Error getting current subscription:", error);
     return null;
   }
-}
-
-export async function requireBilling(request: Request) {
-  const hasSubscription = await hasActiveSubscription(request);
-  
-  if (!hasSubscription) {
-    throw redirect("/app/pricing");
-  }
-  
-  return await getCurrentSubscription(request);
 }
 
 export async function checkCreditsAndBilling(request: Request, requiredCredits: number = 1) {

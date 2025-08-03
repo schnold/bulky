@@ -6,7 +6,7 @@ export async function requireBilling(request: Request, plans: (typeof STARTER_PL
   const hasActiveSubscription = await hasActiveSubscription(request);
   
   if (!hasActiveSubscription) {
-    // Redirect to pricing page if no active subscription
+    // Redirect to pricing page - this will redirect to Shopify's managed pricing
     throw redirect("/app/pricing");
   }
   

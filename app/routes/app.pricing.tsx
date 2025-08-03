@@ -196,80 +196,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`
       });
       
-      // Use manual GraphQL billing implementation (no restricted scopes needed)
-      console.log(`[BILLING] Using manual GraphQL billing approach`);
+      // Redirect to Shopify's managed pricing page
+      console.log(`[BILLING] Redirecting to Shopify managed pricing page`);
       
-      // Manual GraphQL billing implementation
-      const { admin } = await authenticate.admin(request);
-      const { PLAN_CONFIGS } = await import("../shopify.server");
-      const planConfig = PLAN_CONFIGS[planName];
+      // Get the shop domain to construct the managed pricing URL
+      const shopDomain = session.shop;
+      const appHandle = "b1-bulk-product-seo-optimizer"; // Your app handle from shopify.app.toml
       
-      if (!planConfig) {
-        throw new Error(`Plan configuration not found for: ${planName}`);
-      }
+      // Shopify managed pricing URL pattern
+      const managedPricingUrl = `https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/charges/${appHandle}/pricing_plans`;
       
-      const mutation = `
-        mutation appSubscriptionCreate($name: String!, $returnUrl: URL!, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
-          appSubscriptionCreate(name: $name, returnUrl: $returnUrl, test: $test, lineItems: $lineItems) {
-            userErrors {
-              field
-              message
-            }
-            confirmationUrl
-            appSubscription {
-              id
-              name
-              status
-            }
-          }
-        }
-      `;
+      console.log(`[BILLING] Redirecting to managed pricing:`, managedPricingUrl);
       
-      const variables = {
-        name: planConfig.name,
-        returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`,
-        test: process.env.NODE_ENV !== "production",
-        lineItems: [{
-          plan: {
-            appRecurringPricingDetails: {
-              price: { amount: planConfig.amount, currencyCode: planConfig.currencyCode },
-              interval: planConfig.interval
-            }
-          }
-        }]
-      };
-      
-      console.log(`[BILLING] Manual GraphQL mutation variables:`, JSON.stringify(variables, null, 2));
-      
-      const response = await admin.graphql(mutation, { variables });
-      const data = await response.json();
-      
-      console.log(`[BILLING] Manual GraphQL response:`, JSON.stringify(data, null, 2));
-      
-      if (data.errors) {
-        throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-      }
-      
-      const result = data.data?.appSubscriptionCreate;
-      if (result?.userErrors?.length > 0) {
-        throw new Error(`Subscription creation errors: ${JSON.stringify(result.userErrors)}`);
-      }
-      
-      if (result?.confirmationUrl) {
-        console.log(`[BILLING] Manual billing successful, redirecting to:`, result.confirmationUrl);
-        throw new Response(null, {
-          status: 302,
-          headers: {
-            Location: result.confirmationUrl,
-          },
-        });
-      } else {
-        throw new Error('No confirmation URL returned from Shopify');
-      }
-
-      console.log(`[BILLING] Billing request completed successfully`);
-      // This line should never be reached due to the redirect above
-      return json({ success: true });
+      // Redirect to Shopify's hosted pricing page
+      throw new Response(null, {
+        status: 302,
+        headers: {
+          Location: managedPricingUrl,
+        },
+      });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
         error: error instanceof Error ? error.message : String(error),
@@ -640,6 +585,8 @@ export default function Pricing() {
                   Transform your Shopify store with AI-powered SEO optimization.
                   <br />
                   Start free and scale as you grow.
+                  <br /><br />
+                  <strong>Billing is securely managed by Shopify</strong>
                 </Text>
 
                 {currentSubscription && (
@@ -688,7 +635,7 @@ export default function Pricing() {
                   period="per month"
                   description="Perfect for small stores getting started with SEO"
                   features={planFeatures.map(f => f.starter)}
-                  buttonText="Get Started"
+                  buttonText="Choose Plan"
                   buttonVariant="secondary"
                   isCurrentPlan={isCurrentPlan(IMPORTED_STARTER_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_STARTER_PLAN)}
@@ -703,7 +650,7 @@ export default function Pricing() {
                   period="per month"
                   description="For growing stores that need advanced SEO features"
                   features={planFeatures.map(f => f.pro)}
-                  buttonText="Get Started"
+                  buttonText="Choose Plan"
                   buttonVariant="primary"
                   isPopular={true}
                   isCurrentPlan={isCurrentPlan(IMPORTED_PRO_PLAN)}

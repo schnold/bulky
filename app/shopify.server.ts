@@ -61,30 +61,7 @@ export const STARTER_PLAN = "starter_plan";
 export const PRO_PLAN = "pro_plan";
 export const ENTERPRISE_PLAN = "enterprise_plan";
 
-// Plan configurations for GraphQL API
-export const PLAN_CONFIGS = {
-  [STARTER_PLAN]: {
-    name: "Starter Plan",
-    description: "Perfect for small stores getting started with SEO optimization",
-    amount: 9.99,
-    currencyCode: "USD",
-    interval: "EVERY_30_DAYS" as const,
-  },
-  [PRO_PLAN]: {
-    name: "Pro Plan", 
-    description: "For growing stores that need advanced SEO features and bulk optimization",
-    amount: 29.99,
-    currencyCode: "USD",
-    interval: "EVERY_30_DAYS" as const,
-  },
-  [ENTERPRISE_PLAN]: {
-    name: "Enterprise Plan",
-    description: "For large stores with unlimited optimization needs and priority support", 
-    amount: 59.99,
-    currencyCode: "USD",
-    interval: "EVERY_30_DAYS" as const,
-  },
-};
+// Plans are now managed by Shopify Partner Dashboard (Managed Pricing)
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,

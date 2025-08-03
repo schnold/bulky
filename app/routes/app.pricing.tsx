@@ -198,75 +198,73 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       
       // Use manual GraphQL billing implementation (no restricted scopes needed)
       console.log(`[BILLING] Using manual GraphQL billing approach`);
-      try {
-        
-        // Manual GraphQL billing implementation
-        const { admin } = await authenticate.admin(request);
-        const { PLAN_CONFIGS } = await import("../shopify.server");
-        const planConfig = PLAN_CONFIGS[planName];
-        
-        if (!planConfig) {
-          throw new Error(`Plan configuration not found for: ${planName}`);
-        }
-        
-        const mutation = `
-          mutation appSubscriptionCreate($name: String!, $returnUrl: URL!, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
-            appSubscriptionCreate(name: $name, returnUrl: $returnUrl, test: $test, lineItems: $lineItems) {
-              userErrors {
-                field
-                message
-              }
-              confirmationUrl
-              appSubscription {
-                id
-                name
-                status
-              }
+      
+      // Manual GraphQL billing implementation
+      const { admin } = await authenticate.admin(request);
+      const { PLAN_CONFIGS } = await import("../shopify.server");
+      const planConfig = PLAN_CONFIGS[planName];
+      
+      if (!planConfig) {
+        throw new Error(`Plan configuration not found for: ${planName}`);
+      }
+      
+      const mutation = `
+        mutation appSubscriptionCreate($name: String!, $returnUrl: URL!, $test: Boolean, $lineItems: [AppSubscriptionLineItemInput!]!) {
+          appSubscriptionCreate(name: $name, returnUrl: $returnUrl, test: $test, lineItems: $lineItems) {
+            userErrors {
+              field
+              message
+            }
+            confirmationUrl
+            appSubscription {
+              id
+              name
+              status
             }
           }
-        `;
-        
-        const variables = {
-          name: planConfig.name,
-          returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`,
-          test: process.env.NODE_ENV !== "production",
-          lineItems: [{
-            plan: {
-              appRecurringPricingDetails: {
-                price: { amount: planConfig.amount, currencyCode: planConfig.currencyCode },
-                interval: planConfig.interval
-              }
+        }
+      `;
+      
+      const variables = {
+        name: planConfig.name,
+        returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`,
+        test: process.env.NODE_ENV !== "production",
+        lineItems: [{
+          plan: {
+            appRecurringPricingDetails: {
+              price: { amount: planConfig.amount, currencyCode: planConfig.currencyCode },
+              interval: planConfig.interval
             }
-          }]
-        };
-        
-        console.log(`[BILLING] Manual GraphQL mutation variables:`, JSON.stringify(variables, null, 2));
-        
-        const response = await admin.graphql(mutation, { variables });
-        const data = await response.json();
-        
-        console.log(`[BILLING] Manual GraphQL response:`, JSON.stringify(data, null, 2));
-        
-        if (data.errors) {
-          throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-        }
-        
-        const result = data.data?.appSubscriptionCreate;
-        if (result?.userErrors?.length > 0) {
-          throw new Error(`Subscription creation errors: ${JSON.stringify(result.userErrors)}`);
-        }
-        
-        if (result?.confirmationUrl) {
-          console.log(`[BILLING] Manual billing successful, redirecting to:`, result.confirmationUrl);
-          throw new Response(null, {
-            status: 302,
-            headers: {
-              Location: result.confirmationUrl,
-            },
-          });
-        } else {
-          throw new Error('No confirmation URL returned from Shopify');
-        }
+          }
+        }]
+      };
+      
+      console.log(`[BILLING] Manual GraphQL mutation variables:`, JSON.stringify(variables, null, 2));
+      
+      const response = await admin.graphql(mutation, { variables });
+      const data = await response.json();
+      
+      console.log(`[BILLING] Manual GraphQL response:`, JSON.stringify(data, null, 2));
+      
+      if (data.errors) {
+        throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+      }
+      
+      const result = data.data?.appSubscriptionCreate;
+      if (result?.userErrors?.length > 0) {
+        throw new Error(`Subscription creation errors: ${JSON.stringify(result.userErrors)}`);
+      }
+      
+      if (result?.confirmationUrl) {
+        console.log(`[BILLING] Manual billing successful, redirecting to:`, result.confirmationUrl);
+        throw new Response(null, {
+          status: 302,
+          headers: {
+            Location: result.confirmationUrl,
+          },
+        });
+      } else {
+        throw new Error('No confirmation URL returned from Shopify');
       }
 
       console.log(`[BILLING] Billing request completed successfully`);
@@ -295,11 +293,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
     
     try {
-      await billing.cancel({
-        subscriptionId,
-        isTest: process.env.NODE_ENV !== "production",
-        prorate: true,
-      });
+      const { admin } = await authenticate.admin(request);
+      
+      const mutation = `
+        mutation appSubscriptionCancel($id: ID!) {
+          appSubscriptionCancel(id: $id) {
+            userErrors {
+              field
+              message
+            }
+            appSubscription {
+              id
+              status
+            }
+          }
+        }
+      `;
+      
+      const variables = { id: subscriptionId };
+      
+      const response = await admin.graphql(mutation, { variables });
+      const data = await response.json();
+      
+      console.log(`[BILLING] Cancel GraphQL response:`, JSON.stringify(data, null, 2));
+      
+      if (data.errors) {
+        throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+      }
+      
+      const result = data.data?.appSubscriptionCancel;
+      if (result?.userErrors?.length > 0) {
+        throw new Error(`Subscription cancellation errors: ${JSON.stringify(result.userErrors)}`);
+      }
 
       console.log(`[BILLING] Subscription cancelled successfully:`, { subscriptionId, shop: session.shop });
       return json({ success: true, message: "Subscription cancelled successfully" });

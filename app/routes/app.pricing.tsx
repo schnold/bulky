@@ -171,8 +171,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // billing.request throws a redirect response, it doesn't return
       await (billing.request as any)({
         plan: planName,
-        isTest: process.env.NODE_ENV !== "production",
-        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
+        isTest: true, // Always use test mode to avoid charges during development
+        returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`,
       });
 
       console.log(`[BILLING] Billing request completed successfully`);
@@ -203,7 +203,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     try {
       await billing.cancel({
         subscriptionId,
-        isTest: process.env.NODE_ENV !== "production",
+        isTest: true, // Always use test mode to avoid charges during development
         prorate: true,
       });
 

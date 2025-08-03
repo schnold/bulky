@@ -159,20 +159,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
     
     try {
-      // Import PLAN_CONFIGS to get the actual plan objects
-      const { PLAN_CONFIGS } = await import("../shopify.server");
-
-      const selectedPlan = PLAN_CONFIGS[planName as keyof typeof PLAN_CONFIGS];
-      if (!selectedPlan) {
-        console.error(`[BILLING] Invalid plan selected:`, { planName, availablePlans: Object.keys(PLAN_CONFIGS) });
+      // Validate plan name exists
+      const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
+      if (!validPlans.includes(planName)) {
+        console.error(`[BILLING] Invalid plan selected:`, { planName, validPlans });
         return json({ error: "Invalid plan selected" }, { status: 400 });
       }
 
-      console.log(`[BILLING] Initiating billing request for plan:`, selectedPlan);
+      console.log(`[BILLING] Initiating billing request for plan:`, planName);
       
       // billing.request throws a redirect response, it doesn't return
       await (billing.request as any)({
-        plan: selectedPlan,
+        plan: planName,
         isTest: process.env.NODE_ENV !== "production",
         returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`,
       });

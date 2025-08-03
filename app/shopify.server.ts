@@ -61,6 +61,31 @@ export const STARTER_PLAN = "Starter Plan";
 export const PRO_PLAN = "Pro Plan";
 export const ENTERPRISE_PLAN = "Enterprise Plan";
 
+// Plan configurations for GraphQL API
+export const PLAN_CONFIGS = {
+  [STARTER_PLAN]: {
+    name: "Starter Plan",
+    description: "Perfect for small stores getting started with SEO optimization",
+    amount: 9.99,
+    currencyCode: "USD",
+    interval: "EVERY_30_DAYS" as const,
+  },
+  [PRO_PLAN]: {
+    name: "Pro Plan", 
+    description: "For growing stores that need advanced SEO features and bulk optimization",
+    amount: 29.99,
+    currencyCode: "USD",
+    interval: "EVERY_30_DAYS" as const,
+  },
+  [ENTERPRISE_PLAN]: {
+    name: "Enterprise Plan",
+    description: "For large stores with unlimited optimization needs and priority support", 
+    amount: 59.99,
+    currencyCode: "USD",
+    interval: "EVERY_30_DAYS" as const,
+  },
+};
+
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
@@ -70,35 +95,6 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: new LoggingPrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
-  billing: {
-    [STARTER_PLAN]: {
-      lineItems: [
-        {
-          amount: 9.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-    },
-    [PRO_PLAN]: {
-      lineItems: [
-        {
-          amount: 29.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-    },
-    [ENTERPRISE_PLAN]: {
-      lineItems: [
-        {
-          amount: 59.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-    },
-  },
   webhooks: {
     APP_SUBSCRIPTIONS_UPDATE: {
       deliveryMethod: DeliveryMethod.Http,

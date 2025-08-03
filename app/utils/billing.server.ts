@@ -1,48 +1,83 @@
 import { redirect } from "@remix-run/node";
-import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopify.server";
+import { authenticate } from "../shopify.server";
 import { getUserByShop } from "../models/user.server";
-
-export async function requireBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
-  const { session, billing } = await authenticate.admin(request);
-  
-  const billingCheck = await billing.require({
-    plans,
-    isTest: process.env.NODE_ENV !== "production",
-    onFailure: async () => {
-      // Redirect to pricing page for plan selection when no subscription
-      throw redirect("/app/pricing");
-    },
-  });
-
-  return billingCheck;
-}
-
-export async function checkBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
-  const { session, billing } = await authenticate.admin(request);
-  const billingCheck = await billing.check({
-    plans,
-    isTest: process.env.NODE_ENV !== "production",
-  });
-
-  return billingCheck;
-}
 
 export async function hasActiveSubscription(request: Request): Promise<boolean> {
   try {
-    const billingCheck = await checkBilling(request);
-    return billingCheck.hasActivePayment;
+    const { admin } = await authenticate.admin(request);
+    
+    const response = await admin.graphql(
+      `#graphql
+      query GetAppSubscriptions {
+        currentAppInstallation {
+          activeSubscriptions {
+            id
+            status
+          }
+        }
+      }`
+    );
+
+    const responseJson = await response.json();
+    const activeSubscriptions = responseJson.data?.currentAppInstallation?.activeSubscriptions || [];
+    
+    return activeSubscriptions.length > 0;
   } catch (error) {
+    console.error("Error checking subscription:", error);
     return false;
   }
 }
 
 export async function getCurrentSubscription(request: Request) {
   try {
-    const billingCheck = await checkBilling(request);
-    return billingCheck.appSubscriptions.length > 0 ? billingCheck.appSubscriptions[0] : null;
+    const { admin } = await authenticate.admin(request);
+    
+    const response = await admin.graphql(
+      `#graphql
+      query GetAppSubscriptions {
+        currentAppInstallation {
+          activeSubscriptions {
+            id
+            name
+            status
+            createdAt
+            test
+            lineItems {
+              plan {
+                pricingDetails {
+                  ... on AppRecurringPricing {
+                    price {
+                      amount
+                      currencyCode
+                    }
+                    interval
+                  }
+                }
+              }
+            }
+          }
+        }
+      }`
+    );
+
+    const responseJson = await response.json();
+    const activeSubscriptions = responseJson.data?.currentAppInstallation?.activeSubscriptions || [];
+    
+    return activeSubscriptions.length > 0 ? activeSubscriptions[0] : null;
   } catch (error) {
+    console.error("Error getting current subscription:", error);
     return null;
   }
+}
+
+export async function requireBilling(request: Request) {
+  const hasSubscription = await hasActiveSubscription(request);
+  
+  if (!hasSubscription) {
+    throw redirect("/app/pricing");
+  }
+  
+  return await getCurrentSubscription(request);
 }
 
 export async function checkCreditsAndBilling(request: Request, requiredCredits: number = 1) {
@@ -66,17 +101,6 @@ export async function checkCreditsAndBilling(request: Request, requiredCredits: 
   }
 
   return { user, hasSubscription: await hasActiveSubscription(request) };
-}
-
-export async function requestBilling(request: Request, plan: typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN, returnUrl?: string) {
-  const { session, billing } = await authenticate.admin(request);
-  
-  // billing.request throws a redirect response, it doesn't return
-  await billing.request({
-    plan,
-    isTest: process.env.NODE_ENV !== "production",
-    returnUrl: returnUrl || `${process.env.SHOPIFY_APP_URL}/app?billing=success`,
-  });
 }
 
 export function getPlanLimits(planName: string) {

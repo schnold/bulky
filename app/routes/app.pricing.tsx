@@ -113,10 +113,8 @@ interface LoaderData {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   console.log(`[PRICING] Loader called for shop: ${session.shop}`);
-  
-  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   const user = await ensureUserExists(session.shop);
   console.log(`[PRICING] User loaded: ${user.id} for shop: ${user.shop}`);
@@ -124,26 +122,52 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const billingSuccess = url.searchParams.get("billing") === "success";
 
-  // Check current billing status
-  console.log(`[PRICING] Checking billing status for plans: ${[STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]}`);
-  console.log(`[PRICING] Using test mode: ${process.env.NODE_ENV !== "production"}`);
-  
+  // Check current app subscriptions using GraphQL
   let currentSubscription = null;
   try {
-    const billingCheck = await billing.check({
-      plans: [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN],
-      isTest: process.env.NODE_ENV !== "production",
-    });
+    const response = await admin.graphql(
+      `#graphql
+      query GetAppSubscriptions {
+        currentAppInstallation {
+          activeSubscriptions {
+            id
+            name
+            status
+            createdAt
+            test
+            lineItems {
+              plan {
+                pricingDetails {
+                  ... on AppRecurringPricing {
+                    price {
+                      amount
+                      currencyCode
+                    }
+                    interval
+                  }
+                }
+              }
+            }
+          }
+        }
+      }`
+    );
 
-    currentSubscription = billingCheck.appSubscriptions.length > 0
-      ? {
-        id: billingCheck.appSubscriptions[0].id,
-        planName: billingCheck.appSubscriptions[0].name,
-        status: "active",
-      }
-      : null;
-  } catch (billingError) {
-    console.error(`[PRICING] Billing check failed:`, billingError);
+    const responseJson = await response.json();
+    console.log(`[PRICING] Subscription check response:`, JSON.stringify(responseJson, null, 2));
+
+    const activeSubscriptions = responseJson.data?.currentAppInstallation?.activeSubscriptions || [];
+    
+    if (activeSubscriptions.length > 0) {
+      const subscription = activeSubscriptions[0]; // Get the first active subscription
+      currentSubscription = {
+        id: subscription.id,
+        planName: subscription.name,
+        status: subscription.status,
+      };
+    }
+  } catch (error) {
+    console.error(`[PRICING] Failed to check subscriptions:`, error);
     // Continue without subscription info - user will see free plan
     currentSubscription = null;
   }
@@ -172,14 +196,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
-  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
-
-  const formData = await request.formData();
-  const intent = formData.get("intent");
-  const planName = formData.get("plan") as string;
+  console.log(`[PRICING] Action called with method: ${request.method}, URL: ${request.url}`);
   
-  console.log(`[PRICING] Action called: intent=${intent}, plan=${planName}, shop=${session.shop}`);
+  try {
+    const { session, admin } = await authenticate.admin(request);
+    console.log(`[PRICING] Authentication successful for shop: ${session.shop}`);
+    
+    const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN, PLAN_CONFIGS } = await import("../shopify.server");
+
+    const formData = await request.formData();
+    const intent = formData.get("intent");
+    const planName = formData.get("plan") as string;
+    
+    console.log(`[PRICING] Form data received:`, {
+      intent,
+      planName,
+      shop: session.shop,
+      allFormKeys: Array.from(formData.keys())
+    });
 
   if (intent === "subscribe") {
     console.log(`[BILLING] Subscribe request initiated:`, {
@@ -189,41 +223,96 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp: new Date().toISOString()
     });
     
-    try {
-      // Map plan names to actual plan objects
-      const planMap = {
-        [STARTER_PLAN]: STARTER_PLAN,
-        [PRO_PLAN]: PRO_PLAN,
-        [ENTERPRISE_PLAN]: ENTERPRISE_PLAN,
-      };
+    if (!planName) {
+      console.error(`[BILLING] No plan name provided`);
+      return json({ error: "Plan name is required" }, { status: 400 });
+    }
+    
+    const planConfig = PLAN_CONFIGS[planName as keyof typeof PLAN_CONFIGS];
+    if (!planConfig) {
+      console.error(`[BILLING] Invalid plan selected:`, { 
+        planName, 
+        availablePlans: Object.keys(PLAN_CONFIGS)
+      });
+      return json({ error: "Invalid plan selected" }, { status: 400 });
+    }
 
-      const selectedPlan = planMap[planName as keyof typeof planMap];
-      if (!selectedPlan) {
-        console.error(`[BILLING] Invalid plan selected:`, { planName, availablePlans: Object.keys(planMap) });
-        return json({ error: "Invalid plan selected" }, { status: 400 });
+    console.log(`[BILLING] Plan configuration:`, planConfig);
+    
+    try {
+      // Create app subscription using GraphQL mutation
+      const response = await admin.graphql(
+        `#graphql
+        mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
+          appSubscriptionCreate(name: $name, returnUrl: $returnUrl, lineItems: $lineItems, test: $test) {
+            userErrors {
+              field
+              message
+            }
+            appSubscription {
+              id
+              name
+              status
+            }
+            confirmationUrl
+          }
+        }`,
+        {
+          variables: {
+            name: planConfig.name,
+            returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?billing=success`,
+            test: process.env.NODE_ENV !== "production",
+            lineItems: [
+              {
+                plan: {
+                  appRecurringPricingDetails: {
+                    price: {
+                      amount: planConfig.amount,
+                      currencyCode: planConfig.currencyCode
+                    },
+                    interval: planConfig.interval
+                  }
+                }
+              }
+            ]
+          }
+        }
+      );
+
+      const responseJson = await response.json();
+      console.log(`[BILLING] GraphQL response:`, JSON.stringify(responseJson, null, 2));
+
+      const { appSubscriptionCreate } = responseJson.data;
+      
+      if (appSubscriptionCreate.userErrors && appSubscriptionCreate.userErrors.length > 0) {
+        console.error(`[BILLING] Subscription creation failed:`, appSubscriptionCreate.userErrors);
+        return json({ 
+          error: `Failed to create subscription: ${appSubscriptionCreate.userErrors[0].message}` 
+        }, { status: 400 });
       }
 
-      console.log(`[BILLING] Initiating billing request for plan:`, selectedPlan);
-      
-      // billing.request throws a redirect response, it doesn't return
-      await billing.request({
-        plan: selectedPlan as typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN,
-        isTest: process.env.NODE_ENV !== "production",
-        returnUrl: `${process.env.SHOPIFY_APP_URL}/app/pricing?billing=success`,
+      if (!appSubscriptionCreate.confirmationUrl) {
+        console.error(`[BILLING] No confirmation URL received`);
+        return json({ error: "Failed to get confirmation URL" }, { status: 400 });
+      }
+
+      console.log(`[BILLING] Subscription created successfully:`, {
+        subscriptionId: appSubscriptionCreate.appSubscription?.id,
+        confirmationUrl: appSubscriptionCreate.confirmationUrl
       });
 
-      console.log(`[BILLING] Billing request completed successfully`);
-      // This line should never be reached due to the redirect above
-      return json({ success: true });
+      // Redirect to Shopify's confirmation page
+      return redirect(appSubscriptionCreate.confirmationUrl);
+      
     } catch (error) {
-      console.error(`[BILLING] Billing request failed:`, {
+      console.error(`[BILLING] Subscription creation failed:`, {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         shop: session.shop,
         planName,
         timestamp: new Date().toISOString()
       });
-      return json({ error: "Failed to process subscription" }, { status: 400 });
+      return json({ error: "Failed to process subscription" }, { status: 500 });
     }
   }
 
@@ -233,19 +322,55 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log(`[BILLING] Cancel request initiated:`, {
       shop: session.shop,
       subscriptionId,
-      isTest: process.env.NODE_ENV !== "production",
       timestamp: new Date().toISOString()
     });
     
+    if (!subscriptionId) {
+      return json({ error: "Subscription ID is required" }, { status: 400 });
+    }
+    
     try {
-      await billing.cancel({
-        subscriptionId,
-        isTest: process.env.NODE_ENV !== "production",
-        prorate: true,
-      });
+      const response = await admin.graphql(
+        `#graphql
+        mutation AppSubscriptionCancel($id: ID!) {
+          appSubscriptionCancel(id: $id) {
+            userErrors {
+              field
+              message
+            }
+            appSubscription {
+              id
+              status
+            }
+          }
+        }`,
+        {
+          variables: {
+            id: subscriptionId
+          }
+        }
+      );
 
-      console.log(`[BILLING] Subscription cancelled successfully:`, { subscriptionId, shop: session.shop });
+      const responseJson = await response.json();
+      console.log(`[BILLING] Cancel response:`, JSON.stringify(responseJson, null, 2));
+
+      const { appSubscriptionCancel } = responseJson.data;
+      
+      if (appSubscriptionCancel.userErrors && appSubscriptionCancel.userErrors.length > 0) {
+        console.error(`[BILLING] Subscription cancellation failed:`, appSubscriptionCancel.userErrors);
+        return json({ 
+          error: `Failed to cancel subscription: ${appSubscriptionCancel.userErrors[0].message}` 
+        }, { status: 400 });
+      }
+
+      console.log(`[BILLING] Subscription cancelled successfully:`, { 
+        subscriptionId, 
+        shop: session.shop,
+        newStatus: appSubscriptionCancel.appSubscription?.status 
+      });
+      
       return json({ success: true, message: "Subscription cancelled successfully" });
+      
     } catch (error) {
       console.error(`[BILLING] Subscription cancellation failed:`, {
         error: error instanceof Error ? error.message : String(error),
@@ -254,11 +379,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         shop: session.shop,
         timestamp: new Date().toISOString()
       });
-      return json({ error: "Failed to cancel subscription" }, { status: 400 });
+      return json({ error: "Failed to cancel subscription" }, { status: 500 });
     }
   }
 
   return json({ error: "Invalid action" }, { status: 400 });
+  } catch (error) {
+    console.error(`[PRICING] Action error:`, error);
+    
+    // If it's a Response object (redirect), rethrow it
+    if (error instanceof Response) {
+      throw error;
+    }
+    
+    return json({ error: "Server error occurred" }, { status: 500 });
+  }
 };
 
 const FeatureIcon = ({ included }: { included: boolean | string }) => {

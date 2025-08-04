@@ -187,14 +187,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp: new Date().toISOString()
     });
     
-    try {
-      // Validate plan name exists
-      const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
-      if (!validPlans.includes(planName)) {
-        console.error(`[BILLING] Invalid plan selected:`, { planName, validPlans });
-        return json({ error: "Invalid plan selected" }, { status: 400 });
-      }
+    // Validate plan name exists
+    const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
+    if (!validPlans.includes(planName)) {
+      console.error(`[BILLING] Invalid plan selected:`, { planName, validPlans });
+      return json({ error: "Invalid plan selected" }, { status: 400 });
+    }
 
+    try {
       console.log(`[BILLING] Creating managed pricing URL for plan:`, planName);
 
       // Create managed pricing URL (for managed pricing apps)
@@ -208,7 +208,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       
       // Redirect to Shopify's managed pricing page
-      throw new Response(null, {
+      return new Response(null, {
         status: 302,
         headers: {
           Location: result.confirmationUrl,

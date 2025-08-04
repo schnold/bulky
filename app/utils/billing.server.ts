@@ -291,14 +291,24 @@ export async function createAppSubscription(request: Request, planName: string) 
       throw new Error("No confirmation URL received from Shopify");
     }
 
+    // Ensure the confirmation URL includes the shop parameter for session preservation
+    const confirmationUrl = new URL(result.confirmationUrl);
+    if (!confirmationUrl.searchParams.has('shop')) {
+      confirmationUrl.searchParams.set('shop', session.shop);
+    }
+    
+    const finalConfirmationUrl = confirmationUrl.toString();
+
     console.log(`[BILLING] Subscription created successfully:`, {
       subscriptionId: result.appSubscription?.id,
-      confirmationUrl: result.confirmationUrl,
-      shop: session.shop
+      originalConfirmationUrl: result.confirmationUrl,
+      finalConfirmationUrl,
+      shop: session.shop,
+      shopParamAdded: !new URL(result.confirmationUrl).searchParams.has('shop')
     });
 
     return {
-      confirmationUrl: result.confirmationUrl,
+      confirmationUrl: finalConfirmationUrl,
       appSubscription: result.appSubscription,
       isManaged: false
     };

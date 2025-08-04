@@ -208,12 +208,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         isManaged: result.isManaged
       });
       
-      // Return the URL for App Bridge redirect (to break out of iframe)
+      // For embedded apps, we can either return URL for redirect or handle it server-side
+      // Option 1: Return URL for client-side redirect (current approach)
       return json({ 
         success: true, 
         redirectUrl: result.confirmationUrl,
         message: "Redirecting to Shopify billing..." 
       });
+
+      // Option 2: Server-side redirect (alternative - uncomment if client-side doesn't work)
+      // return new Response(null, {
+      //   status: 302,
+      //   headers: {
+      //     Location: result.confirmationUrl,
+      //   },
+      // });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
         error: error instanceof Error ? error.message : String(error),
@@ -513,14 +522,28 @@ export default function Pricing() {
   // Handle App Bridge redirect for managed pricing
   useEffect(() => {
     if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) {
-      console.log('[BILLING] Redirecting with App Bridge to:', actionData.redirectUrl);
-      // Use window.top to break out of iframe and redirect the parent window
+      console.log('[BILLING] Redirecting to managed pricing:', actionData.redirectUrl);
       const url = actionData.redirectUrl as string;
-      if (window.top) {
-        window.top.location.href = url;
-      } else {
-        // Fallback if window.top is not available
-        window.location.href = url;
+      
+      // For embedded apps, use parent window redirect to maintain context
+      // The URL already includes embedded=1 and shop parameters
+      try {
+        if (window.parent && window.parent !== window) {
+          // We're in an iframe, redirect the parent window
+          window.parent.location.href = url;
+        } else {
+          // Not in iframe, redirect current window
+          window.location.href = url;
+        }
+        console.log('[BILLING] Embedded app redirect initiated');
+      } catch (error) {
+        console.warn('[BILLING] Parent redirect failed, using top window:', error);
+        // Fallback to top window if parent redirect fails
+        if (window.top) {
+          window.top.location.href = url;
+        } else {
+          window.location.href = url;
+        }
       }
     }
   }, [actionData]);
@@ -682,6 +705,11 @@ export default function Pricing() {
                       <Text as="p" variant="bodySm">
                         Debug Info: User Plan = "{user.plan}", Subscription = {currentSubscription ? `"${currentSubscription.planName}"` : "none"}
                       </Text>
+                      {actionData && 'redirectUrl' in actionData && (
+                        <Text as="p" variant="bodySm" fontWeight="semibold">
+                          Last Generated URL: {actionData.redirectUrl}
+                        </Text>
+                      )}
                       <Box paddingBlockStart="300">
                         <Text as="p" variant="bodySm" fontWeight="semibold">
                           Manual Plan Update (Development Only):

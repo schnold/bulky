@@ -189,3 +189,121 @@ export async function createManagedPricingUrl(request: Request, planName: string
     isManaged: true
   };
 }
+
+// API-based billing using appSubscriptionCreate mutation
+// This provides better control and eliminates shop URL prompts
+export async function createAppSubscription(request: Request, planName: string) {
+  const { session, admin } = await authenticate.admin(request);
+  
+  // Validate plan name
+  const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
+  if (!validPlans.includes(planName)) {
+    throw new Error("Invalid plan name");
+  }
+
+  // Plan pricing configuration
+  const planConfig: { [key: string]: { amount: number; name: string } } = {
+    [STARTER_PLAN]: { amount: 9.99, name: "Starter Plan" },
+    [PRO_PLAN]: { amount: 29.99, name: "Pro Plan" },
+    [ENTERPRISE_PLAN]: { amount: 59.99, name: "Enterprise Plan" }
+  };
+
+  const config = planConfig[planName];
+  const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`;
+
+  const mutation = `
+    mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
+      appSubscriptionCreate(name: $name, returnUrl: $returnUrl, lineItems: $lineItems, test: $test) {
+        userErrors {
+          field
+          message
+        }
+        appSubscription {
+          id
+          name
+          status
+        }
+        confirmationUrl
+      }
+    }
+  `;
+
+  const variables = {
+    name: config.name,
+    returnUrl,
+    test: process.env.NODE_ENV !== "production",
+    lineItems: [
+      {
+        plan: {
+          appRecurringPricingDetails: {
+            price: {
+              amount: config.amount,
+              currencyCode: "USD"
+            },
+            interval: "EVERY_30_DAYS"
+          }
+        }
+      }
+    ]
+  };
+
+  console.log(`[BILLING] Creating app subscription for ${session.shop}:`, {
+    planName,
+    config,
+    returnUrl,
+    isTest: variables.test
+  });
+
+  try {
+    const response = await admin.graphql(mutation, { variables });
+    const data = await response.json() as {
+      errors?: any[];
+      data?: {
+        appSubscriptionCreate?: {
+          userErrors: any[];
+          appSubscription?: {
+            id: string;
+            name: string;
+            status: string;
+          };
+          confirmationUrl?: string;
+        };
+      };
+    };
+
+    console.log(`[BILLING] GraphQL response:`, JSON.stringify(data, null, 2));
+
+    if (data.errors) {
+      throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+    }
+
+    const result = data.data?.appSubscriptionCreate;
+    if (result?.userErrors?.length > 0) {
+      throw new Error(`Subscription creation errors: ${JSON.stringify(result.userErrors)}`);
+    }
+
+    if (!result?.confirmationUrl) {
+      throw new Error("No confirmation URL received from Shopify");
+    }
+
+    console.log(`[BILLING] Subscription created successfully:`, {
+      subscriptionId: result.appSubscription?.id,
+      confirmationUrl: result.confirmationUrl,
+      shop: session.shop
+    });
+
+    return {
+      confirmationUrl: result.confirmationUrl,
+      appSubscription: result.appSubscription,
+      isManaged: false
+    };
+  } catch (error) {
+    console.error(`[BILLING] Failed to create app subscription:`, {
+      error: error instanceof Error ? error.message : String(error),
+      planName,
+      shop: session.shop,
+      variables
+    });
+    throw error;
+  }
+}

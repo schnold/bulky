@@ -66,7 +66,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
     if (syncResult?.updated) {
       console.log(`🔄 Dashboard: User plan synced successfully:`, syncResult);
-      // Reload user data after sync
+      // Get fresh user data after sync (don't mutate existing object)
       user = await ensureUserExists(session.shop, true);
     }
   } catch (error) {

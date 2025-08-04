@@ -50,13 +50,18 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
     throw new Error("No app_subscription found in webhook payload");
   }
   
-  if (!subscription.id) {
+  // Handle both 'id' and 'admin_graphql_api_id' fields
+  const subscriptionId = subscription.id || subscription.admin_graphql_api_id;
+  
+  if (!subscriptionId) {
     console.error(`[WEBHOOK] No subscription ID found:`, subscription);
     throw new Error("No subscription ID found in webhook payload");
   }
   
+  console.log(`[WEBHOOK] Using subscription ID:`, subscriptionId);
+  
   console.log(`[WEBHOOK] Processing subscription:`, {
-    id: subscription.id,
+    id: subscriptionId,
     name: subscription.name,
     status: subscription.status
   });
@@ -65,12 +70,14 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
   const user = await ensureUserExists(shop);
 
   // Get or create subscription record
-  let subscriptionRecord = await getSubscriptionByShopifyId(subscription.id);
+  let subscriptionRecord = await getSubscriptionByShopifyId(subscriptionId);
   
   const planName = subscription.name;
   const status = subscription.status.toLowerCase();
-  const currentPeriodStart = new Date(subscription.current_period_start);
-  const currentPeriodEnd = new Date(subscription.current_period_end);
+  
+  // Handle missing date fields gracefully
+  const currentPeriodStart = subscription.current_period_start ? new Date(subscription.current_period_start) : new Date();
+  const currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
   const trialStart = subscription.trial_start ? new Date(subscription.trial_start) : undefined;
   const trialEnd = subscription.trial_end ? new Date(subscription.trial_end) : undefined;
   const isTest = subscription.test || false;
@@ -78,7 +85,7 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
   if (!subscriptionRecord) {
     // Create new subscription
     const newSubscription = await createSubscription({
-      shopifySubscriptionId: subscription.id,
+      shopifySubscriptionId: subscriptionId,
       userId: user.id,
       planName,
       status,
@@ -91,7 +98,7 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
     
     console.log(`[WEBHOOK] Created new subscription record:`, {
       subscriptionId: newSubscription.id,
-      shopifySubscriptionId: subscription.id,
+      shopifySubscriptionId: subscriptionId,
       planName,
       status
     });
@@ -108,11 +115,11 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
       updateData.cancelledAt = new Date();
     }
     
-    await updateSubscription(subscription.id, updateData);
+    await updateSubscription(subscriptionId, updateData);
     
     console.log(`[WEBHOOK] Updated existing subscription:`, {
       subscriptionId: subscriptionRecord.id,
-      shopifySubscriptionId: subscription.id,
+      shopifySubscriptionId: subscriptionId,
       planName,
       status,
       updateData

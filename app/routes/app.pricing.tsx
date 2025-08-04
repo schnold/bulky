@@ -23,7 +23,7 @@ import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polar
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
-import { createManagedPricingUrl } from "../utils/billing.server";
+import { createManagedPricingUrl, createAppSubscription } from "../utils/billing.server";
 import { manuallyUpdateUserPlan, syncUserPlanWithSubscription, updateUserPlanAndAddCredits } from "../models/user.server";
 
 // Plan constants - keep in sync with shopify.server.ts
@@ -118,7 +118,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
-  const user = await ensureUserExists(session.shop);
+  let user = await ensureUserExists(session.shop);
   
   // Check for success parameter (user returning from Shopify confirmation)
   const url = new URL(request.url);
@@ -162,10 +162,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
       if (syncResult?.updated) {
         console.log(`[PRICING] User plan synced successfully:`, syncResult);
-        // Reload user data after sync
-        const updatedUser = await ensureUserExists(session.shop);
-        user.plan = updatedUser.plan;
-        user.credits = updatedUser.credits;
+        // Get fresh user data after sync (don't mutate existing object)
+        user = await ensureUserExists(session.shop);
       }
     } catch (error) {
       console.error('[PRICING] Error syncing user plan:', error);
@@ -210,33 +208,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     try {
-      console.log(`[BILLING] Creating managed pricing URL for plan:`, planName);
+      console.log(`[BILLING] Creating app subscription for plan:`, planName);
 
-      // Create managed pricing URL (for managed pricing apps)
-      const result = await createManagedPricingUrl(request, planName);
+      // Create app subscription using GraphQL API (eliminates shop URL prompts)
+      const result = await createAppSubscription(request, planName);
       
-      console.log(`[BILLING] Managed pricing URL created successfully:`, {
+      console.log(`[BILLING] App subscription created successfully:`, {
         confirmationUrl: result.confirmationUrl,
         shop: session.shop,
         planName,
+        subscriptionId: result.appSubscription?.id,
         isManaged: result.isManaged
       });
       
-      // For embedded apps, use server-side redirect to maintain context
-      // Server-side redirect works better for managed pricing
+      // Server-side redirect to Shopify's confirmation page
       return new Response(null, {
         status: 302,
         headers: {
           Location: result.confirmationUrl,
         },
       });
-
-      // Alternative: Client-side redirect (disabled in favor of server-side)
-      // return json({ 
-      //   success: true, 
-      //   redirectUrl: result.confirmationUrl,
-      //   message: "Redirecting to Shopify billing..." 
-      // });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
         error: error instanceof Error ? error.message : String(error),
@@ -522,7 +513,14 @@ export default function Pricing() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [showToast, setShowToast] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(success);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  
+  // Handle success parameter from URL
+  useEffect(() => {
+    if (success) {
+      setShowSuccessToast(true);
+    }
+  }, [success]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const app = useAppBridge();
 
@@ -694,7 +692,10 @@ export default function Pricing() {
                         </Text>
                       )}
                       <Text as="p" variant="bodySm" tone="subdued">
-                        💡 Now using server-side redirects for better embedded app support
+                        ✅ Now using API-based billing (appSubscriptionCreate) - no more shop URL prompts!
+                      </Text>
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        🔧 Fixed webhook to handle both 'id' and 'admin_graphql_api_id' fields
                       </Text>
                       <Box paddingBlockStart="300">
                         <Text as="p" variant="bodySm" fontWeight="semibold">

@@ -120,7 +120,7 @@ export const PLAN_CREDITS = {
 
 export function getCreditsForPlan(planName: string): number {
   const planMap: { [key: string]: keyof typeof PLAN_CREDITS } = {
-    // Display names from Shopify
+    // Display names from Shopify managed pricing
     "Starter Plan": "starter",
     "Pro Plan": "pro",
     "Enterprise Plan": "enterprise",
@@ -128,9 +128,18 @@ export function getCreditsForPlan(planName: string): number {
     "starter_plan": "starter",
     "pro_plan": "pro", 
     "enterprise_plan": "enterprise",
+    // Possible variations with different casing
+    "starter": "starter",
+    "pro": "pro",
+    "enterprise": "enterprise",
+    // Handle the actual plan names from Partner Dashboard
+    "B1 Bulk Product SEO Optimizer - Starter": "starter",
+    "B1 Bulk Product SEO Optimizer - Pro": "pro",
+    "B1 Bulk Product SEO Optimizer - Enterprise": "enterprise"
   };
   
-  const plan = planMap[planName] || "free";
+  // Try exact match first, then case-insensitive
+  const plan = planMap[planName] || planMap[planName?.toLowerCase()] || "free";
   return PLAN_CREDITS[plan];
 }
 
@@ -159,4 +168,68 @@ export async function manuallyUpdateUserPlan(shop: string, planName: string) {
   
   console.log(`[MANUAL UPDATE] Plan updated successfully for ${shop}`);
   return result;
+}
+
+// Sync user plan with current Shopify subscription (fallback if webhook is missed)
+export async function syncUserPlanWithSubscription(shop: string, currentSubscriptions: any[]) {
+  console.log(`[SYNC] Syncing user plan with subscription for shop: ${shop}`);
+  console.log(`[SYNC] Current subscriptions:`, JSON.stringify(currentSubscriptions, null, 2));
+  
+  const user = await getUserByShop(shop);
+  if (!user) {
+    console.log(`[SYNC] No user found for shop: ${shop}`);
+    return null;
+  }
+  
+  // Check if there's an active subscription
+  const activeSubscription = currentSubscriptions.find(sub => sub.status === "ACTIVE");
+  
+  if (activeSubscription) {
+    const planName = activeSubscription.name;
+    const planMapping: { [key: string]: string } = {
+      "Starter Plan": "starter",
+      "Pro Plan": "pro",
+      "Enterprise Plan": "enterprise",
+      "starter_plan": "starter",
+      "pro_plan": "pro",
+      "enterprise_plan": "enterprise",
+      "starter": "starter",
+      "pro": "pro",
+      "enterprise": "enterprise",
+      "B1 Bulk Product SEO Optimizer - Starter": "starter",
+      "B1 Bulk Product SEO Optimizer - Pro": "pro",
+      "B1 Bulk Product SEO Optimizer - Enterprise": "enterprise"
+    };
+    
+    const expectedPlan = planMapping[planName] || planMapping[planName?.toLowerCase()] || "free";
+    const expectedCredits = getCreditsForPlan(planName);
+    
+    console.log(`[SYNC] Subscription found:`, {
+      subscriptionName: planName,
+      expectedPlan,
+      currentUserPlan: user.plan,
+      expectedCredits,
+      currentUserCredits: user.credits
+    });
+    
+    // Only update if there's a mismatch
+    if (user.plan !== expectedPlan) {
+      console.log(`[SYNC] Plan mismatch detected, updating user plan from ${user.plan} to ${expectedPlan}`);
+      await updateUserPlan(shop, expectedPlan, expectedCredits);
+      return { updated: true, newPlan: expectedPlan, newCredits: expectedCredits };
+    } else {
+      console.log(`[SYNC] User plan is already in sync`);
+      return { updated: false, currentPlan: user.plan, currentCredits: user.credits };
+    }
+  } else {
+    console.log(`[SYNC] No active subscription found, ensuring user is on free plan`);
+    
+    // No active subscription, should be on free plan
+    if (user.plan !== "free") {
+      await updateUserPlan(shop, "free", 10);
+      return { updated: true, newPlan: "free", newCredits: 10 };
+    } else {
+      return { updated: false, currentPlan: "free", currentCredits: user.credits };
+    }
+  }
 }

@@ -24,7 +24,7 @@ import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
 import { createManagedPricingUrl } from "../utils/billing.server";
-import { manuallyUpdateUserPlan } from "../models/user.server";
+import { manuallyUpdateUserPlan, syncUserPlanWithSubscription } from "../models/user.server";
 
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
@@ -155,6 +155,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         planName: activeSubscription.name,
         status: activeSubscription.status,
       };
+    }
+    
+    // Sync user plan with actual subscription status (fallback if webhook was missed)
+    try {
+      const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
+      if (syncResult?.updated) {
+        console.log(`[PRICING] User plan synced successfully:`, syncResult);
+        // Reload user data after sync
+        const updatedUser = await ensureUserExists(session.shop);
+        user.plan = updatedUser.plan;
+        user.credits = updatedUser.credits;
+      }
+    } catch (error) {
+      console.error('[PRICING] Error syncing user plan:', error);
     }
   } catch (error) {
     console.error('[BILLING] Error checking subscriptions:', error);

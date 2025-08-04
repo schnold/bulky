@@ -15,12 +15,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     console.log(`[WEBHOOK] Received webhook: ${topic} for shop: ${shop}`);
     console.log(`[WEBHOOK] Session:`, session ? 'Valid' : 'None');
+    console.log(`[WEBHOOK] Raw payload:`, JSON.stringify(payload, null, 2));
 
     if (topic === "APP_SUBSCRIPTIONS_UPDATE") {
       await handleAppSubscriptionUpdate(shop, payload);
       console.log(`[WEBHOOK] Successfully processed APP_SUBSCRIPTIONS_UPDATE for ${shop}`);
     } else {
-      console.log(`[WEBHOOK] Unhandled webhook topic: ${topic}`);
+      console.log(`[WEBHOOK] Unhandled webhook topic: ${topic} (received payload:`, JSON.stringify(payload, null, 2), ')');
     }
 
     return new Response("OK", { status: 200 });
@@ -28,7 +29,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.error(`[WEBHOOK] Error processing webhook:`, {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      url: request.url,
+      method: request.method,
+      headers: Object.fromEntries(request.headers.entries())
     });
     return new Response("Error processing webhook", { status: 500 });
   }
@@ -119,26 +123,44 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
   let userCredits = 10;
 
   if (status === "active") {
-    // Map subscription name to user plan
-    // Note: These names must match exactly what Shopify sends in the webhook
+    // Enhanced plan mapping to handle all possible plan name variations
     const planMap: { [key: string]: string } = {
+      // Display names from Shopify managed pricing
       "Starter Plan": "starter",
       "Pro Plan": "pro", 
       "Enterprise Plan": "enterprise",
-      // Also handle the plan IDs that might be sent
+      // Plan IDs that might be sent
       "starter_plan": "starter",
       "pro_plan": "pro",
-      "enterprise_plan": "enterprise"
+      "enterprise_plan": "enterprise",
+      // Possible variations with different casing
+      "starter": "starter",
+      "pro": "pro",
+      "enterprise": "enterprise",
+      // Handle the actual plan names from Partner Dashboard
+      "B1 Bulk Product SEO Optimizer - Starter": "starter",
+      "B1 Bulk Product SEO Optimizer - Pro": "pro",
+      "B1 Bulk Product SEO Optimizer - Enterprise": "enterprise"
     };
     
-    userPlan = planMap[planName] || "free";
+    // Try exact match first, then case-insensitive
+    userPlan = planMap[planName] || planMap[planName?.toLowerCase()] || "free";
     userCredits = getCreditsForPlan(planName);
     
-    console.log(`[WEBHOOK] Plan mapping:`, {
+    console.log(`[WEBHOOK] Enhanced plan mapping:`, {
       receivedPlanName: planName,
+      planNameLowerCase: planName?.toLowerCase(),
       mappedUserPlan: userPlan,
       credits: userCredits,
-      allValidPlans: Object.keys(planMap)
+      allValidPlans: Object.keys(planMap),
+      subscriptionStatus: status
+    });
+  } else {
+    console.log(`[WEBHOOK] Subscription not active, setting to free plan:`, {
+      receivedPlanName: planName,
+      subscriptionStatus: status,
+      userPlan: "free",
+      userCredits: 10
     });
   }
 

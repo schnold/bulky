@@ -39,7 +39,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Get user data from database (user is guaranteed to exist from app.tsx loader)
   const { ensureUserExists } = await import("../utils/db.server");
-  const user = await ensureUserExists(session.shop, true); // Include keywords
+  let user = await ensureUserExists(session.shop, true); // Include keywords
+
+  // Check current subscriptions and sync if needed
+  try {
+    const query = `
+      query {
+        currentAppInstallation {
+          activeSubscriptions {
+            id
+            name
+            status
+            currentPeriodEnd
+            test
+          }
+        }
+      }
+    `;
+    
+    const response = await admin.graphql(query);
+    const data = await response.json();
+    const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
+    
+    // Sync user plan with actual subscription status (fallback if webhook was missed)
+    const { syncUserPlanWithSubscription } = await import("../models/user.server");
+    const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
+    if (syncResult?.updated) {
+      console.log(`🔄 Dashboard: User plan synced successfully:`, syncResult);
+      // Reload user data after sync
+      user = await ensureUserExists(session.shop, true);
+    }
+  } catch (error) {
+    console.error('🔄 Dashboard: Error syncing user plan:', error);
+  }
 
   console.log(`🔍 LOADER - User found:`, {
     id: user.id,

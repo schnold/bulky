@@ -506,6 +506,37 @@ const FAQItem = ({ question, answer, isOpen, onToggle }: {
   );
 };
 
+// Error boundary component to catch React errors
+function ErrorBoundary({ children }: { children: React.ReactNode }) {
+  const [hasError, setHasError] = useState(false);
+  
+  useEffect(() => {
+    const handleError = (error: ErrorEvent) => {
+      console.error('[BILLING] Caught error:', error);
+      if (error.message.includes('Minified React error')) {
+        setHasError(true);
+        // Try to recover after a brief delay
+        setTimeout(() => setHasError(false), 1000);
+      }
+    };
+    
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+  
+  if (hasError) {
+    return (
+      <Page>
+        <Banner tone="warning">
+          <Text as="p">The app is recovering from an error. Please wait a moment...</Text>
+        </Banner>
+      </Page>
+    );
+  }
+  
+  return <>{children}</>;
+}
+
 export default function Pricing() {
   const { user, currentSubscription, success } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -519,10 +550,29 @@ export default function Pricing() {
     setIsClient(true);
   }, []);
 
-  // Handle success parameter from URL
+  // Handle success parameter from URL and clean up problematic parameters
   useEffect(() => {
     if (success) {
       setShowSuccessToast(true);
+      
+      // Clean up URL parameters that might cause issues after payment
+      try {
+        const currentUrl = new URL(window.location.href);
+        const hasCleanupParams = currentUrl.searchParams.has('success') || 
+                                currentUrl.searchParams.has('processed') || 
+                                currentUrl.searchParams.has('billing_redirect');
+        
+        if (hasCleanupParams) {
+          // Remove parameters that are no longer needed
+          currentUrl.searchParams.delete('processed');
+          currentUrl.searchParams.delete('billing_redirect');
+          // Keep success parameter for toast display
+          
+          window.history.replaceState({}, '', currentUrl.toString());
+        }
+      } catch (error) {
+        console.warn('[BILLING] Error cleaning URL parameters:', error);
+      }
     }
   }, [success]);
 
@@ -531,28 +581,27 @@ export default function Pricing() {
     // Only run on client side to avoid hydration issues
     if (!isClient) return;
     
-    const urlParams = new URLSearchParams(window.location.search);
-    const hasProcessedRedirect = urlParams.get('processed') === 'true';
-    const hasBillingRedirect = urlParams.get('billing_redirect') === 'true';
-    
-    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle' && !hasProcessedRedirect && !hasBillingRedirect) {
-      console.log('[BILLING] Redirecting to billing confirmation URL:', actionData.redirectUrl);
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasProcessedRedirect = urlParams.get('processed') === 'true';
       
-      // Navigate to a clean URL first to clear actionData, then redirect
-      const cleanUrl = new URL(window.location.href);
-      cleanUrl.searchParams.delete('processed'); // Clean any existing processed flags
-      cleanUrl.searchParams.set('billing_redirect', 'true'); // Temporary flag
-      
-      // Clear actionData by navigating to clean URL, then immediately redirect
-      window.history.replaceState({}, '', cleanUrl.toString());
-      
-      // Very small delay to ensure state is updated, then redirect
-      const timer = setTimeout(() => {
-        // Break out of iframe using window.top for more reliable redirection
+      if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle' && !hasProcessedRedirect) {
+        console.log('[BILLING] Redirecting to billing confirmation URL:', actionData.redirectUrl);
+        
+        // Set processed flag immediately to prevent re-execution
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.set('processed', 'true');
+        window.history.replaceState({}, '', cleanUrl.toString());
+        
+        // Force full page navigation to break out of any problematic iframe context
+        window.top!.location.replace(actionData.redirectUrl);
+      }
+    } catch (error) {
+      console.error('[BILLING] Error in redirect handler:', error);
+      // Fallback: still try to redirect even if there's an error
+      if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) {
         window.top!.location.href = actionData.redirectUrl;
-      }, 50);
-      
-      return () => clearTimeout(timer);
+      }
     }
   }, [actionData, navigation.state, isClient]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
@@ -685,7 +734,8 @@ export default function Pricing() {
   ) : null;
 
   return (
-    <Frame>
+    <ErrorBoundary>
+      <Frame>
         <Page>
           <TitleBar title="Pricing & Plans" />
 
@@ -942,5 +992,6 @@ export default function Pricing() {
           {successToastMarkup}
         </Page>
       </Frame>
+    </ErrorBoundary>
   );
 }

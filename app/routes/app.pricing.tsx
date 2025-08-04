@@ -23,7 +23,7 @@ import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polar
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
-import { createSubscription } from "../utils/billing.server";
+import { createManagedPricingUrl } from "../utils/billing.server";
 
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
@@ -195,19 +195,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ error: "Invalid plan selected" }, { status: 400 });
       }
 
-      console.log(`[BILLING] Creating subscription for plan:`, planName);
+      console.log(`[BILLING] Creating managed pricing URL for plan:`, planName);
 
-      // Create subscription using proper Shopify GraphQL API
-      const result = await createSubscription(request, planName);
+      // Create managed pricing URL (for managed pricing apps)
+      const result = await createManagedPricingUrl(request, planName);
       
-      console.log(`[BILLING] Subscription created successfully:`, {
-        subscriptionId: result.subscriptionId,
+      console.log(`[BILLING] Managed pricing URL created successfully:`, {
         confirmationUrl: result.confirmationUrl,
         shop: session.shop,
-        planName
+        planName,
+        isManaged: result.isManaged
       });
       
-      // Redirect to Shopify's confirmation page
+      // Redirect to Shopify's managed pricing page
       throw new Response(null, {
         status: 302,
         headers: {
@@ -499,7 +499,7 @@ export default function Pricing() {
     },
     {
       question: "How does billing work?",
-      answer: "You're billed monthly on the date you subscribe. The Free plan is always free with no hidden costs. You can cancel or change plans at any time."
+      answer: "Billing is handled entirely by Shopify for your security and convenience. You're billed monthly through Shopify's system on the date you subscribe. The Free plan is always free with no hidden costs. You can cancel or change plans at any time through your Shopify admin."
     },
     {
       question: "Is the Free plan really free forever?",
@@ -593,7 +593,11 @@ export default function Pricing() {
                   <br />
                   Start free and scale as you grow.
                   <br /><br />
-                  <strong>Billing is securely managed by Shopify</strong>
+                  <strong>✅ Billing is securely managed by Shopify</strong>
+                  <br />
+                  <strong>✅ One-click subscription management</strong>
+                  <br />
+                  <strong>✅ Cancel anytime through Shopify</strong>
                 </Text>
 
                 {currentSubscription && (

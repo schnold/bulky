@@ -1,3 +1,14 @@
+/**
+ * Billing utilities for Shopify Managed Pricing App
+ * 
+ * This app uses Shopify's Managed Pricing model, which means:
+ * - Shopify handles all billing and payment processing
+ * - Users subscribe through Shopify's hosted pricing page
+ * - App receives webhooks when subscriptions change
+ * - App CANNOT use appSubscriptionCreate or other billing mutations
+ * 
+ * For more info: https://shopify.dev/docs/apps/launch/billing-models#managed-pricing
+ */
 import { redirect } from "@remix-run/node";
 import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopify.server";
 import { getUserByShop } from "../models/user.server";
@@ -125,113 +136,32 @@ export function getPlanLimits(planName: string) {
   return limits[planName] || limits["Starter Plan"];
 }
 
-// Plan pricing configuration
-const PLAN_PRICING = {
-  [STARTER_PLAN]: {
-    name: "Starter Plan",
-    amount: 9.99,
-    currencyCode: "USD",
-    interval: "EVERY_30_DAYS",
-  },
-  [PRO_PLAN]: {
-    name: "Pro Plan", 
-    amount: 29.99,
-    currencyCode: "USD",
-    interval: "EVERY_30_DAYS",
-  },
-  [ENTERPRISE_PLAN]: {
-    name: "Enterprise Plan",
-    amount: 59.99,
-    currencyCode: "USD", 
-    interval: "EVERY_30_DAYS",
-  },
-};
-
-export async function createSubscription(request: Request, planName: string) {
-  const { admin, session } = await authenticate.admin(request);
+// Managed pricing app configuration
+// This app uses Shopify's managed pricing, so billing is handled by Shopify's interface
+export async function createManagedPricingUrl(request: Request, planName: string) {
+  const { session } = await authenticate.admin(request);
   
-  const planConfig = PLAN_PRICING[planName as keyof typeof PLAN_PRICING];
-  if (!planConfig) {
+  // Validate plan name
+  const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
+  if (!validPlans.includes(planName)) {
     throw new Error("Invalid plan name");
   }
 
-  const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`;
-  const isTest = process.env.NODE_ENV !== "production";
-
-  const mutation = `
-    mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
-      appSubscriptionCreate(name: $name, returnUrl: $returnUrl, lineItems: $lineItems, test: $test) {
-        userErrors {
-          field
-          message
-        }
-        appSubscription {
-          id
-          name
-          status
-          currentPeriodEnd
-          test
-        }
-        confirmationUrl
-      }
-    }
-  `;
-
-  const variables = {
-    name: planConfig.name,
-    returnUrl,
-    test: isTest,
-    lineItems: [
-      {
-        plan: {
-          appRecurringPricingDetails: {
-            price: {
-              amount: planConfig.amount,
-              currencyCode: planConfig.currencyCode,
-            },
-            interval: planConfig.interval,
-          },
-        },
-      },
-    ],
-  };
-
-  console.log(`[BILLING] Creating subscription for ${session.shop}:`, {
-    planName: planConfig.name,
-    amount: planConfig.amount,
-    isTest,
-    returnUrl,
+  const shopDomain = session.shop;
+  const appHandle = "b1-bulk-product-seo-optimizer"; // Your app handle from shopify.app.toml
+  
+  // For managed pricing apps, redirect to Shopify's managed pricing page
+  const managedPricingUrl = `https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/charges/${appHandle}/pricing_plans`;
+  
+  console.log(`[BILLING] Creating managed pricing URL for ${session.shop}:`, {
+    planName,
+    managedPricingUrl,
+    shopDomain,
+    appHandle
   });
 
-  try {
-    const response = await admin.graphql(mutation, { variables });
-    const data = await response.json();
-
-    console.log(`[BILLING] Subscription creation response:`, JSON.stringify(data, null, 2));
-
-    if ((data as any).errors) {
-      throw new Error(`GraphQL errors: ${JSON.stringify((data as any).errors)}`);
-    }
-
-    const result = data.data?.appSubscriptionCreate;
-    if (result?.userErrors?.length > 0) {
-      throw new Error(`Subscription creation errors: ${JSON.stringify(result.userErrors)}`);
-    }
-
-    if (!result?.confirmationUrl) {
-      throw new Error("No confirmation URL returned from Shopify");
-    }
-
-    return {
-      confirmationUrl: result.confirmationUrl,
-      subscriptionId: result.appSubscription?.id,
-    };
-  } catch (error) {
-    console.error(`[BILLING] Subscription creation failed:`, {
-      error: error instanceof Error ? error.message : String(error),
-      shop: session.shop,
-      planName,
-    });
-    throw error;
-  }
+  return {
+    confirmationUrl: managedPricingUrl,
+    isManaged: true
+  };
 }

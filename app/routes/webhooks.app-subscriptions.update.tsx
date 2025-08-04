@@ -13,22 +13,48 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     const { topic, shop, session, payload } = await authenticate.webhook(request);
     
-    console.log(`Received webhook: ${topic} for shop: ${shop}`);
-    console.log("Payload:", JSON.stringify(payload, null, 2));
+    console.log(`[WEBHOOK] Received webhook: ${topic} for shop: ${shop}`);
+    console.log(`[WEBHOOK] Session:`, session ? 'Valid' : 'None');
 
     if (topic === "APP_SUBSCRIPTIONS_UPDATE") {
       await handleAppSubscriptionUpdate(shop, payload);
+      console.log(`[WEBHOOK] Successfully processed APP_SUBSCRIPTIONS_UPDATE for ${shop}`);
+    } else {
+      console.log(`[WEBHOOK] Unhandled webhook topic: ${topic}`);
     }
 
     return new Response("OK", { status: 200 });
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error(`[WEBHOOK] Error processing webhook:`, {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    });
     return new Response("Error processing webhook", { status: 500 });
   }
 };
 
 async function handleAppSubscriptionUpdate(shop: string, payload: any) {
+  console.log(`[WEBHOOK] Processing app subscription update for shop: ${shop}`);
+  console.log(`[WEBHOOK] Full payload structure:`, JSON.stringify(payload, null, 2));
+  
   const subscription = payload.app_subscription;
+  
+  if (!subscription) {
+    console.error(`[WEBHOOK] No app_subscription found in payload:`, payload);
+    throw new Error("No app_subscription found in webhook payload");
+  }
+  
+  if (!subscription.id) {
+    console.error(`[WEBHOOK] No subscription ID found:`, subscription);
+    throw new Error("No subscription ID found in webhook payload");
+  }
+  
+  console.log(`[WEBHOOK] Processing subscription:`, {
+    id: subscription.id,
+    name: subscription.name,
+    status: subscription.status
+  });
   
   // Ensure user exists
   const user = await ensureUserExists(shop);

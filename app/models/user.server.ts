@@ -73,10 +73,28 @@ export async function updateSubscription(
 }
 
 export async function getSubscriptionByShopifyId(shopifySubscriptionId: string) {
-  return await prisma.subscription.findUnique({
-    where: { shopifySubscriptionId },
-    include: { user: true },
-  });
+  if (!shopifySubscriptionId) {
+    console.error(`[DB] getSubscriptionByShopifyId called with undefined/null ID:`, shopifySubscriptionId);
+    return null;
+  }
+  
+  console.log(`[DB] Looking for subscription with Shopify ID: ${shopifySubscriptionId}`);
+  
+  try {
+    const subscription = await prisma.subscription.findUnique({
+      where: { shopifySubscriptionId },
+      include: { user: true },
+    });
+    
+    console.log(`[DB] Subscription lookup result:`, subscription ? 'FOUND' : 'NOT FOUND');
+    return subscription;
+  } catch (error) {
+    console.error(`[DB] Error looking up subscription:`, {
+      shopifySubscriptionId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error;
+  }
 }
 
 export async function getActiveSubscriptionByShop(shop: string) {

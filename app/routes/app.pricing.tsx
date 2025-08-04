@@ -707,7 +707,7 @@ export default function Pricing() {
                       </Text>
                       {actionData && 'redirectUrl' in actionData && (
                         <Text as="p" variant="bodySm" fontWeight="semibold">
-                          Last Generated URL: {actionData.redirectUrl}
+                          Last Generated URL: {String(actionData.redirectUrl)}
                         </Text>
                       )}
                       <Box paddingBlockStart="300">

@@ -324,12 +324,15 @@ const PricingCard = ({
     <Card>
       <div
         style={{
-          background: isPopular
-            ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
-            : isFree
-              ? 'linear-gradient(135deg, #fefefe 0%, #f9fafb 100%)'
-              : undefined,
+          background: isCurrentPlan
+            ? 'linear-gradient(135deg, #e0f2fe 0%, #f1f8ff 100%)'
+            : isPopular
+              ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
+              : isFree
+                ? 'linear-gradient(135deg, #fefefe 0%, #f9fafb 100%)'
+                : undefined,
           borderRadius: '12px',
+          border: isCurrentPlan ? '2px solid #1976d2' : undefined,
           position: 'relative' as const,
           minHeight: '100%',
         }}
@@ -343,12 +346,17 @@ const PricingCard = ({
                   <Text variant="headingLg" as="h3" tone={isPopular ? "magic" : undefined}>
                     {title}
                   </Text>
-                  {isPopular && (
+                  {isCurrentPlan && (
+                    <Badge tone="info" size="small">
+                      ✓ Current Plan
+                    </Badge>
+                  )}
+                  {isPopular && !isCurrentPlan && (
                     <Badge tone="magic" size="small">
                       Most Popular
                     </Badge>
                   )}
-                  {isFree && (
+                  {isFree && !isCurrentPlan && (
                     <Badge tone="success" size="small">
                       Free Forever
                     </Badge>
@@ -496,7 +504,30 @@ export default function Pricing() {
 
   // Helper function to check if current plan matches
   const isCurrentPlan = (planKey: string) => {
-    return currentSubscription?.planName === planKey;
+    if (!currentSubscription) {
+      return false;
+    }
+    
+    // Check against both the planName from subscription and mapped values
+    const planMapping: { [key: string]: string[] } = {
+      "starter_plan": ["starter_plan", "Starter Plan"],
+      "pro_plan": ["pro_plan", "Pro Plan"],
+      "enterprise_plan": ["enterprise_plan", "Enterprise Plan"]
+    };
+    
+    const possibleNames = planMapping[planKey] || [planKey];
+    return possibleNames.includes(currentSubscription.planName);
+  };
+
+  // Helper function to check if user has an active plan based on user.plan
+  const isUserOnPlan = (planKey: string) => {
+    const planMapping: { [key: string]: string } = {
+      "starter_plan": "starter",
+      "pro_plan": "pro", 
+      "enterprise_plan": "enterprise"
+    };
+    
+    return user.plan === planMapping[planKey];
   };
 
   const faqData = [
@@ -638,6 +669,16 @@ export default function Pricing() {
                     </Banner>
                   </Box>
                 )}
+
+                {process.env.NODE_ENV === "development" && (
+                  <Box paddingBlockStart="200">
+                    <Banner tone="warning">
+                      <Text as="p" variant="bodySm">
+                        Debug Info: User Plan = "{user.plan}", Subscription = {currentSubscription ? `"${currentSubscription.planName}"` : "none"}
+                      </Text>
+                    </Banner>
+                  </Box>
+                )}
               </BlockStack>
             </Box>
           </div>
@@ -652,10 +693,10 @@ export default function Pricing() {
                   period=""
                   description="Perfect for trying out our SEO optimization"
                   features={planFeatures.map(f => f.free)}
-                  buttonText="Get Started Free"
+                  buttonText={user.plan === "free" ? "Current Plan" : "Get Started Free"}
                   buttonVariant="secondary"
                   isFree={true}
-                  isCurrentPlan={currentSubscription?.planName === FREE_PLAN}
+                  isCurrentPlan={user.plan === "free"}
                   onSubscribe={() => handleSubscribe(FREE_PLAN)}
                   loading={isLoading}
                 />
@@ -668,9 +709,9 @@ export default function Pricing() {
                   period="per month"
                   description="Perfect for small stores getting started with SEO"
                   features={planFeatures.map(f => f.starter)}
-                  buttonText="Choose Plan"
+                  buttonText={isCurrentPlan(IMPORTED_STARTER_PLAN) || isUserOnPlan(IMPORTED_STARTER_PLAN) ? "Current Plan" : "Choose Plan"}
                   buttonVariant="secondary"
-                  isCurrentPlan={isCurrentPlan(IMPORTED_STARTER_PLAN)}
+                  isCurrentPlan={isCurrentPlan(IMPORTED_STARTER_PLAN) || isUserOnPlan(IMPORTED_STARTER_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_STARTER_PLAN)}
                   loading={isLoading}
                 />
@@ -683,10 +724,10 @@ export default function Pricing() {
                   period="per month"
                   description="For growing stores that need advanced SEO features"
                   features={planFeatures.map(f => f.pro)}
-                  buttonText="Choose Plan"
+                  buttonText={isCurrentPlan(IMPORTED_PRO_PLAN) || isUserOnPlan(IMPORTED_PRO_PLAN) ? "Current Plan" : "Choose Plan"}
                   buttonVariant="primary"
                   isPopular={true}
-                  isCurrentPlan={isCurrentPlan(IMPORTED_PRO_PLAN)}
+                  isCurrentPlan={isCurrentPlan(IMPORTED_PRO_PLAN) || isUserOnPlan(IMPORTED_PRO_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_PRO_PLAN)}
                   loading={isLoading}
                 />
@@ -699,9 +740,9 @@ export default function Pricing() {
                   period="per month"
                   description="For large stores with unlimited optimization needs"
                   features={planFeatures.map(f => f.enterprise)}
-                  buttonText="Contact Sales"
+                  buttonText={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN) || isUserOnPlan(IMPORTED_ENTERPRISE_PLAN) ? "Current Plan" : "Contact Sales"}
                   buttonVariant="secondary"
-                  isCurrentPlan={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN)}
+                  isCurrentPlan={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN) || isUserOnPlan(IMPORTED_ENTERPRISE_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_ENTERPRISE_PLAN)}
                   loading={isLoading}
                 />

@@ -94,14 +94,26 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
 
   if (status === "active") {
     // Map subscription name to user plan
+    // Note: These names must match exactly what Shopify sends in the webhook
     const planMap: { [key: string]: string } = {
       "Starter Plan": "starter",
-      "Pro Plan": "pro",
+      "Pro Plan": "pro", 
       "Enterprise Plan": "enterprise",
+      // Also handle the plan IDs that might be sent
+      "starter_plan": "starter",
+      "pro_plan": "pro",
+      "enterprise_plan": "enterprise"
     };
     
     userPlan = planMap[planName] || "free";
     userCredits = getCreditsForPlan(planName);
+    
+    console.log(`[WEBHOOK] Plan mapping:`, {
+      receivedPlanName: planName,
+      mappedUserPlan: userPlan,
+      credits: userCredits,
+      allValidPlans: Object.keys(planMap)
+    });
   }
 
   await updateUserPlan(shop, userPlan, userCredits);

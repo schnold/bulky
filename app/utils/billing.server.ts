@@ -170,6 +170,11 @@ export async function createManagedPricingUrl(request: Request, planName: string
   const url = new URL(baseUrl);
   url.searchParams.set('shop', shopDomain);
   
+  // Add plan-specific parameter if needed
+  if (planName !== 'starter_plan') {
+    url.searchParams.set('plan', planName);
+  }
+  
   const managedPricingUrl = url.toString();
   
   console.log(`[BILLING] Creating managed pricing URL for ${session.shop}:`, {
@@ -178,7 +183,7 @@ export async function createManagedPricingUrl(request: Request, planName: string
     shopDomain,
     shopName,
     appHandle,
-    embedded: true,
+    embedded: false,
     urlFormat,
     availableFormats: Object.keys(urlFormats),
     selectedFormat: baseUrl

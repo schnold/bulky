@@ -236,7 +236,7 @@ export async function createAppSubscription(request: Request, planName: string) 
   const variables = {
     name: config.name,
     returnUrl,
-    test: process.env.NODE_ENV !== "production",
+    test: true, // Force test charges for now (was: process.env.NODE_ENV !== "production")
     lineItems: [
       {
         plan: {

@@ -1,13 +1,13 @@
 /**
- * Billing utilities for Shopify Managed Pricing App
+ * Billing utilities for Shopify App using API-based billing
  * 
- * This app uses Shopify's Managed Pricing model, which means:
- * - Shopify handles all billing and payment processing
- * - Users subscribe through Shopify's hosted pricing page
+ * This app uses API-based billing model, which means:
+ * - App handles billing through GraphQL mutations
+ * - Uses appSubscriptionCreate to create subscriptions
  * - App receives webhooks when subscriptions change
- * - App CANNOT use appSubscriptionCreate or other billing mutations
+ * - Provides direct control over billing flow
  * 
- * For more info: https://shopify.dev/docs/apps/launch/billing-models#managed-pricing
+ * For more info: https://shopify.dev/docs/apps/launch/billing-models#api-based-billing
  */
 import { redirect } from "@remix-run/node";
 import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopify.server";

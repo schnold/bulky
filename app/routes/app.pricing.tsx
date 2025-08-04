@@ -208,22 +208,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     try {
-      console.log(`[BILLING] Creating managed pricing URL for plan:`, planName);
+      console.log(`[BILLING] Creating app subscription for plan:`, planName);
 
-      // Use managed pricing URL instead of billing API for Managed Pricing Apps
-      const result = await createManagedPricingUrl(request, planName);
+      // Create app subscription using GraphQL API (eliminates shop URL prompts)
+      const result = await createAppSubscription(request, planName);
       
-      console.log(`[BILLING] Managed pricing URL created successfully:`, {
+      console.log(`[BILLING] App subscription created successfully:`, {
         confirmationUrl: result.confirmationUrl,
         shop: session.shop,
         planName,
+        subscriptionId: result.appSubscription?.id,
         isManaged: result.isManaged
       });
       
-      // Return the URL to the client for iframe breakout redirect
-      return json({ 
-        redirectUrl: result.confirmationUrl,
-        isManaged: result.isManaged 
+      // Server-side redirect to Shopify's confirmation page
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: result.confirmationUrl,
+        },
       });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
@@ -519,26 +522,7 @@ export default function Pricing() {
     }
   }, [success]);
 
-  // Handle managed pricing redirect
-  useEffect(() => {
-    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle') {
-      console.log('[BILLING] Redirecting to managed pricing URL:', actionData.redirectUrl);
-      
-      // Use immediate redirect - no timeout needed
-      try {
-        // Try App Bridge redirect first for better embedded app handling
-        if (window.parent !== window) {
-          window.parent.location.href = actionData.redirectUrl;
-        } else {
-          window.location.href = actionData.redirectUrl;
-        }
-      } catch (error) {
-        // Fallback to window.top if App Bridge fails
-        console.warn('[BILLING] App Bridge redirect failed, using window.top:', error);
-        window.top!.location.href = actionData.redirectUrl;
-      }
-    }
-  }, [actionData, navigation.state]);
+  // Note: Using server-side redirects with Billing API, no client-side redirect logic needed
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const app = useAppBridge();
 

@@ -123,6 +123,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Check for success parameter (user returning from Shopify confirmation)
   const url = new URL(request.url);
   const success = url.searchParams.get("success") === "true";
+  
+  // Log return from billing for debugging
+  if (success) {
+    console.log('[BILLING] User returned from billing with shop:', {
+      shop: session.shop,
+      searchParams: Object.fromEntries(url.searchParams),
+      userAgent: request.headers.get('user-agent')
+    });
+  }
 
   // Check current billing status using manual GraphQL
   let currentSubscription = null;

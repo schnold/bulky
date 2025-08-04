@@ -214,7 +214,7 @@ export async function createAppSubscription(request: Request, planName: string) 
   };
 
   const config = planConfig[planName];
-  const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true`;
+  const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true&shop=${session.shop}`;
 
   const mutation = `
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {

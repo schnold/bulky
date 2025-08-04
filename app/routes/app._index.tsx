@@ -44,8 +44,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   console.log(`🔍 LOADER - User found:`, {
     id: user.id,
     shop: user.shop,
+    plan: user.plan,
+    credits: user.credits,
     keywordsCount: user.keywords?.length || 0,
-    keywords: user.keywords?.map(k => k.keyword) || []
+    keywords: user.keywords?.map(k => k.keyword) || [],
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
   });
 
   return json({ user });

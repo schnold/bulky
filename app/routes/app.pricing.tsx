@@ -24,6 +24,7 @@ import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
 import { createManagedPricingUrl } from "../utils/billing.server";
+import { manuallyUpdateUserPlan } from "../models/user.server";
 
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
@@ -222,6 +223,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         timestamp: new Date().toISOString()
       });
       return json({ error: "Failed to process subscription" }, { status: 400 });
+    }
+  }
+
+  if (intent === "manualUpdate") {
+    const planName = formData.get("planName") as string;
+    
+    try {
+      console.log(`[MANUAL] Manual plan update requested for ${session.shop} to plan: ${planName}`);
+      
+      await manuallyUpdateUserPlan(session.shop, planName);
+      
+      return json({ 
+        success: true, 
+        message: `Plan manually updated to ${planName} with appropriate credits` 
+      });
+    } catch (error) {
+      console.error(`[MANUAL] Manual plan update failed:`, {
+        error: error instanceof Error ? error.message : String(error),
+        shop: session.shop,
+        planName,
+      });
+      return json({ error: "Failed to update plan manually" }, { status: 400 });
     }
   }
 
@@ -653,29 +676,94 @@ export default function Pricing() {
                   <strong>✅ Cancel anytime through Shopify</strong>
                 </Text>
 
-                {currentSubscription && (
-                  <Box paddingBlockStart="400">
-                    <Banner
-                      title={`Currently on ${currentSubscription.planName}`}
-                      tone="info"
-                      action={{
-                        content: "Cancel Subscription",
-                        onAction: handleCancel,
-                      }}
-                    >
-                      <Text as="p">
-                        You have {user.credits} optimization credits remaining this month.
-                      </Text>
-                    </Banner>
-                  </Box>
-                )}
-
                 {process.env.NODE_ENV === "development" && (
                   <Box paddingBlockStart="200">
                     <Banner tone="warning">
                       <Text as="p" variant="bodySm">
                         Debug Info: User Plan = "{user.plan}", Subscription = {currentSubscription ? `"${currentSubscription.planName}"` : "none"}
                       </Text>
+                      <Box paddingBlockStart="300">
+                        <Text as="p" variant="bodySm" fontWeight="semibold">
+                          Manual Plan Update (Development Only):
+                        </Text>
+                        <InlineStack gap="200" blockAlign="center">
+                          <Button 
+                            size="micro" 
+                            onClick={() => {
+                              const form = document.createElement("form");
+                              form.method = "POST";
+                              form.style.display = "none";
+                              
+                              const intentInput = document.createElement("input");
+                              intentInput.type = "hidden";
+                              intentInput.name = "intent";
+                              intentInput.value = "manualUpdate";
+                              form.appendChild(intentInput);
+                              
+                              const planInput = document.createElement("input");
+                              planInput.type = "hidden";
+                              planInput.name = "planName";
+                              planInput.value = "starter_plan";
+                              form.appendChild(planInput);
+                              
+                              document.body.appendChild(form);
+                              form.submit();
+                            }}
+                          >
+                            Set Starter
+                          </Button>
+                          <Button 
+                            size="micro" 
+                            onClick={() => {
+                              const form = document.createElement("form");
+                              form.method = "POST";
+                              form.style.display = "none";
+                              
+                              const intentInput = document.createElement("input");
+                              intentInput.type = "hidden";
+                              intentInput.name = "intent";
+                              intentInput.value = "manualUpdate";
+                              form.appendChild(intentInput);
+                              
+                              const planInput = document.createElement("input");
+                              planInput.type = "hidden";
+                              planInput.name = "planName";
+                              planInput.value = "pro_plan";
+                              form.appendChild(planInput);
+                              
+                              document.body.appendChild(form);
+                              form.submit();
+                            }}
+                          >
+                            Set Pro
+                          </Button>
+                          <Button 
+                            size="micro" 
+                            onClick={() => {
+                              const form = document.createElement("form");
+                              form.method = "POST";
+                              form.style.display = "none";
+                              
+                              const intentInput = document.createElement("input");
+                              intentInput.type = "hidden";
+                              intentInput.name = "intent";
+                              intentInput.value = "manualUpdate";
+                              form.appendChild(intentInput);
+                              
+                              const planInput = document.createElement("input");
+                              planInput.type = "hidden";
+                              planInput.name = "planName";
+                              planInput.value = "free";
+                              form.appendChild(planInput);
+                              
+                              document.body.appendChild(form);
+                              form.submit();
+                            }}
+                          >
+                            Set Free
+                          </Button>
+                        </InlineStack>
+                      </Box>
                     </Banner>
                   </Box>
                 )}
@@ -693,10 +781,10 @@ export default function Pricing() {
                   period=""
                   description="Perfect for trying out our SEO optimization"
                   features={planFeatures.map(f => f.free)}
-                  buttonText={user.plan === "free" ? "Current Plan" : "Get Started Free"}
+                  buttonText={user.plan === "free" && !currentSubscription ? "Current Plan" : "Get Started Free"}
                   buttonVariant="secondary"
                   isFree={true}
-                  isCurrentPlan={user.plan === "free"}
+                  isCurrentPlan={user.plan === "free" && !currentSubscription}
                   onSubscribe={() => handleSubscribe(FREE_PLAN)}
                   loading={isLoading}
                 />
@@ -749,6 +837,24 @@ export default function Pricing() {
               </Grid.Cell>
             </Grid>
           </Box>
+
+          {/* Current Subscription Status */}
+          {currentSubscription && (
+            <Box paddingBlockStart="800">
+              <Banner
+                title={`Currently subscribed to ${currentSubscription.planName}`}
+                tone="success"
+                action={{
+                  content: "Cancel Subscription",
+                  onAction: handleCancel,
+                }}
+              >
+                <Text as="p">
+                  You have {user.credits} optimization credits remaining this month. Your subscription renews automatically through Shopify.
+                </Text>
+              </Banner>
+            </Box>
+          )}
 
           {/* FAQ Section */}
           <Box paddingBlockStart="1000">

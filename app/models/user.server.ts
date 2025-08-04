@@ -102,11 +102,43 @@ export const PLAN_CREDITS = {
 
 export function getCreditsForPlan(planName: string): number {
   const planMap: { [key: string]: keyof typeof PLAN_CREDITS } = {
+    // Display names from Shopify
     "Starter Plan": "starter",
     "Pro Plan": "pro",
     "Enterprise Plan": "enterprise",
+    // Plan IDs that might be sent
+    "starter_plan": "starter",
+    "pro_plan": "pro", 
+    "enterprise_plan": "enterprise",
   };
   
   const plan = planMap[planName] || "free";
   return PLAN_CREDITS[plan];
+}
+
+// Manual function to update user plan and credits (for testing/fallback)
+export async function manuallyUpdateUserPlan(shop: string, planName: string) {
+  const planMapping: { [key: string]: string } = {
+    "Starter Plan": "starter",
+    "Pro Plan": "pro",
+    "Enterprise Plan": "enterprise",
+    "starter_plan": "starter",
+    "pro_plan": "pro",
+    "enterprise_plan": "enterprise"
+  };
+  
+  const userPlan = planMapping[planName] || "free";
+  const userCredits = getCreditsForPlan(planName);
+  
+  console.log(`[MANUAL UPDATE] Updating user plan:`, {
+    shop,
+    planName,
+    userPlan,
+    userCredits
+  });
+  
+  const result = await updateUserPlan(shop, userPlan, userCredits);
+  
+  console.log(`[MANUAL UPDATE] Plan updated successfully for ${shop}`);
+  return result;
 }

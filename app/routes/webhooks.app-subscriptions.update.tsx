@@ -116,7 +116,28 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
     });
   }
 
-  await updateUserPlan(shop, userPlan, userCredits);
-  
-  console.log(`Updated user ${user.id} to plan ${userPlan} with ${userCredits} credits`);
+  try {
+    const updateResult = await updateUserPlan(shop, userPlan, userCredits);
+    
+    console.log(`[WEBHOOK] Successfully updated user ${user.id} to plan ${userPlan} with ${userCredits} credits`, {
+      shop,
+      oldPlan: user.plan,
+      newPlan: userPlan,
+      oldCredits: user.credits,
+      newCredits: userCredits,
+      subscriptionStatus: status,
+      subscriptionPlanName: planName,
+      updateResult
+    });
+  } catch (error) {
+    console.error(`[WEBHOOK] Failed to update user plan:`, {
+      error: error instanceof Error ? error.message : String(error),
+      shop,
+      userId: user.id,
+      attemptedPlan: userPlan,
+      attemptedCredits: userCredits,
+      subscriptionPlanName: planName
+    });
+    throw error; // Re-throw to ensure webhook processing fails if user update fails
+  }
 }

@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { 
   updateUserPlan, 
+  updateUserPlanAndAddCredits,
   createSubscription, 
   updateSubscription, 
   getSubscriptionByShopifyId,
@@ -76,7 +77,7 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
 
   if (!subscriptionRecord) {
     // Create new subscription
-    subscriptionRecord = await createSubscription({
+    const newSubscription = await createSubscription({
       shopifySubscriptionId: subscription.id,
       userId: user.id,
       planName,
@@ -89,7 +90,7 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
     });
     
     console.log(`[WEBHOOK] Created new subscription record:`, {
-      subscriptionId: subscriptionRecord.id,
+      subscriptionId: newSubscription.id,
       shopifySubscriptionId: subscription.id,
       planName,
       status
@@ -165,14 +166,15 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
   }
 
   try {
-    const updateResult = await updateUserPlan(shop, userPlan, userCredits);
+    // Use the new function that adds credits instead of setting them
+    const updateResult = await updateUserPlanAndAddCredits(shop, userPlan, userCredits);
     
-    console.log(`[WEBHOOK] Successfully updated user ${user.id} to plan ${userPlan} with ${userCredits} credits`, {
+    console.log(`[WEBHOOK] Successfully updated user ${user.id} to plan ${userPlan}, added ${userCredits} credits`, {
       shop,
       oldPlan: user.plan,
       newPlan: userPlan,
       oldCredits: user.credits,
-      newCredits: userCredits,
+      creditsAdded: userPlan === "free" ? 0 : userCredits,
       subscriptionStatus: status,
       subscriptionPlanName: planName,
       updateResult

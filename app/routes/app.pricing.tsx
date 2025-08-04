@@ -24,7 +24,7 @@ import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
 import { createManagedPricingUrl } from "../utils/billing.server";
-import { manuallyUpdateUserPlan, syncUserPlanWithSubscription } from "../models/user.server";
+import { manuallyUpdateUserPlan, syncUserPlanWithSubscription, updateUserPlanAndAddCredits } from "../models/user.server";
 
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
@@ -222,20 +222,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         isManaged: result.isManaged
       });
       
-      // For embedded apps, we can either return URL for redirect or handle it server-side
-      // Option 1: Return URL for client-side redirect (current approach)
-      return json({ 
-        success: true, 
-        redirectUrl: result.confirmationUrl,
-        message: "Redirecting to Shopify billing..." 
+      // For embedded apps, use server-side redirect to maintain context
+      // Server-side redirect works better for managed pricing
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: result.confirmationUrl,
+        },
       });
 
-      // Option 2: Server-side redirect (alternative - uncomment if client-side doesn't work)
-      // return new Response(null, {
-      //   status: 302,
-      //   headers: {
-      //     Location: result.confirmationUrl,
-      //   },
+      // Alternative: Client-side redirect (disabled in favor of server-side)
+      // return json({ 
+      //   success: true, 
+      //   redirectUrl: result.confirmationUrl,
+      //   message: "Redirecting to Shopify billing..." 
       // });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
@@ -533,34 +533,8 @@ export default function Pricing() {
 
   const isLoading = navigation.state === "submitting";
 
-  // Handle App Bridge redirect for managed pricing
-  useEffect(() => {
-    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) {
-      console.log('[BILLING] Redirecting to managed pricing:', actionData.redirectUrl);
-      const url = actionData.redirectUrl as string;
-      
-      // For embedded apps, use parent window redirect to maintain context
-      // The URL already includes embedded=1 and shop parameters
-      try {
-        if (window.parent && window.parent !== window) {
-          // We're in an iframe, redirect the parent window
-          window.parent.location.href = url;
-        } else {
-          // Not in iframe, redirect current window
-          window.location.href = url;
-        }
-        console.log('[BILLING] Embedded app redirect initiated');
-      } catch (error) {
-        console.warn('[BILLING] Parent redirect failed, using top window:', error);
-        // Fallback to top window if parent redirect fails
-        if (window.top) {
-          window.top.location.href = url;
-        } else {
-          window.location.href = url;
-        }
-      }
-    }
-  }, [actionData]);
+  // Note: App Bridge redirect handling removed since we now use server-side redirects
+  // This provides better embedded app context maintenance for managed pricing
 
   // Helper function to check if current plan matches
   const isCurrentPlan = (planKey: string) => {
@@ -593,7 +567,7 @@ export default function Pricing() {
   const faqData = [
     {
       question: "How do optimization credits work?",
-      answer: "Each product optimization uses 1 credit. Credits reset monthly on your billing date. The Free plan includes 5 credits per month to get you started."
+      answer: "Each product optimization uses 1 credit. When you upgrade plans, new credits are added to your existing balance. Credits don't expire, so you can accumulate them over time. The Free plan includes 10 credits to get you started."
     },
     {
       question: "Can I change plans anytime?",
@@ -669,12 +643,7 @@ export default function Pricing() {
     />
   ) : null;
 
-  const redirectToastMarkup = (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) ? (
-    <Toast
-      content="Redirecting to Shopify billing page..."
-      onDismiss={() => {}}
-    />
-  ) : null;
+  // Note: redirect toast removed since we now use server-side redirects
 
   const successToastMarkup = showSuccessToast ? (
     <Toast
@@ -719,14 +688,20 @@ export default function Pricing() {
                       <Text as="p" variant="bodySm">
                         Debug Info: User Plan = "{user.plan}", Subscription = {currentSubscription ? `"${currentSubscription.planName}"` : "none"}
                       </Text>
-                      {actionData && 'redirectUrl' in actionData && (
+                      {actionData && 'message' in actionData && actionData.message && (
                         <Text as="p" variant="bodySm" fontWeight="semibold">
-                          Last Generated URL: {String(actionData.redirectUrl)}
+                          Last Result: {String(actionData.message)}
                         </Text>
                       )}
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        💡 Now using server-side redirects for better embedded app support
+                      </Text>
                       <Box paddingBlockStart="300">
                         <Text as="p" variant="bodySm" fontWeight="semibold">
                           Manual Plan Update (Development Only):
+                        </Text>
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          ℹ️ Credits are now ADDED to balance, not SET (except free plan)
                         </Text>
                         <InlineStack gap="200" blockAlign="center">
                           <Button 
@@ -892,7 +867,12 @@ export default function Pricing() {
                 }}
               >
                 <Text as="p">
-                  You have {user.credits} optimization credits remaining this month. Your subscription renews automatically through Shopify.
+                  You have <strong>{user.credits} optimization credits</strong> remaining this month. Your subscription renews automatically through Shopify.
+                  {process.env.NODE_ENV === "development" && (
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      <br />💡 Dev note: Plan changes ADD credits to your balance (except switching to free)
+                    </Text>
+                  )}
                 </Text>
               </Banner>
             </Box>
@@ -925,7 +905,6 @@ export default function Pricing() {
 
           {toastMarkup}
           {successToastMarkup}
-          {redirectToastMarkup}
         </Page>
       </Frame>
   );

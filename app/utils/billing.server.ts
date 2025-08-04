@@ -150,11 +150,22 @@ export async function createManagedPricingUrl(request: Request, planName: string
   const shopDomain = session.shop;
   const appHandle = "b1-bulk-product-seo-optimizer"; // Your app handle from shopify.app.toml
   
-  // For embedded apps, we need to maintain the embedded context
-  // Construct URL with embedded app parameters
-  const baseUrl = `https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/charges/${appHandle}/pricing_plans`;
+  // For managed pricing apps, try the simpler URL format:
+  // https://admin.shopify.com/store/{shop-name}/charges/{app-handle}/pricing_plans
+  const shopName = shopDomain.replace('.myshopify.com', '');
   
-  // Add embedded app parameters to maintain context
+  // Try different URL formats based on environment variable or default
+  const urlFormat = process.env.SHOPIFY_BILLING_URL_FORMAT || 'charges';
+  
+  const urlFormats: { [key: string]: string } = {
+    charges: `https://admin.shopify.com/store/${shopName}/charges/${appHandle}/pricing_plans`,
+    billing: `https://admin.shopify.com/store/${shopName}/billing/${appHandle}/pricing_plans`,
+    apps: `https://admin.shopify.com/store/${shopName}/apps/${appHandle}/pricing_plans`
+  };
+  
+  const baseUrl = urlFormats[urlFormat] || urlFormats.charges;
+  
+  // Add minimal embedded app parameters
   const url = new URL(baseUrl);
   url.searchParams.set('embedded', '1');
   url.searchParams.set('shop', shopDomain);
@@ -165,8 +176,12 @@ export async function createManagedPricingUrl(request: Request, planName: string
     planName,
     managedPricingUrl,
     shopDomain,
+    shopName,
     appHandle,
-    embedded: true
+    embedded: true,
+    urlFormat,
+    availableFormats: Object.keys(urlFormats),
+    selectedFormat: baseUrl
   });
 
   return {

@@ -34,6 +34,40 @@ export async function updateUserPlan(shop: string, plan: string, credits: number
   });
 }
 
+export async function updateUserPlanAndAddCredits(shop: string, newPlan: string, creditsToAdd: number) {
+  const user = await getUserByShop(shop);
+  if (!user) {
+    throw new Error(`User not found for shop: ${shop}`);
+  }
+
+  // If switching to free plan, don't add any credits, just change the plan
+  if (newPlan === "free") {
+    return await prisma.user.update({
+      where: { shop },
+      data: { plan: newPlan },
+    });
+  }
+
+  // For paid plans, add credits to existing balance
+  const newCreditsBalance = user.credits + creditsToAdd;
+  
+  console.log(`[CREDITS] Adding credits for ${shop}:`, {
+    oldPlan: user.plan,
+    newPlan,
+    oldCredits: user.credits,
+    creditsToAdd,
+    newCreditsBalance
+  });
+
+  return await prisma.user.update({
+    where: { shop },
+    data: { 
+      plan: newPlan, 
+      credits: newCreditsBalance 
+    },
+  });
+}
+
 export async function updateUserCredits(shop: string, credits: number) {
   return await prisma.user.update({
     where: { shop },
@@ -164,7 +198,7 @@ export async function manuallyUpdateUserPlan(shop: string, planName: string) {
     userCredits
   });
   
-  const result = await updateUserPlan(shop, userPlan, userCredits);
+  const result = await updateUserPlanAndAddCredits(shop, userPlan, userCredits);
   
   console.log(`[MANUAL UPDATE] Plan updated successfully for ${shop}`);
   return result;
@@ -215,8 +249,9 @@ export async function syncUserPlanWithSubscription(shop: string, currentSubscrip
     // Only update if there's a mismatch
     if (user.plan !== expectedPlan) {
       console.log(`[SYNC] Plan mismatch detected, updating user plan from ${user.plan} to ${expectedPlan}`);
-      await updateUserPlan(shop, expectedPlan, expectedCredits);
-      return { updated: true, newPlan: expectedPlan, newCredits: expectedCredits };
+      const result = await updateUserPlanAndAddCredits(shop, expectedPlan, expectedCredits);
+      const updatedUser = await getUserByShop(shop);
+      return { updated: true, newPlan: expectedPlan, newCredits: updatedUser?.credits || 0 };
     } else {
       console.log(`[SYNC] User plan is already in sync`);
       return { updated: false, currentPlan: user.plan, currentCredits: user.credits };
@@ -226,8 +261,9 @@ export async function syncUserPlanWithSubscription(shop: string, currentSubscrip
     
     // No active subscription, should be on free plan
     if (user.plan !== "free") {
-      await updateUserPlan(shop, "free", 10);
-      return { updated: true, newPlan: "free", newCredits: 10 };
+      const result = await updateUserPlanAndAddCredits(shop, "free", 0); // Free plan gets 0 credits added
+      const updatedUser = await getUserByShop(shop);
+      return { updated: true, newPlan: "free", newCredits: updatedUser?.credits || 0 };
     } else {
       return { updated: false, currentPlan: "free", currentCredits: user.credits };
     }

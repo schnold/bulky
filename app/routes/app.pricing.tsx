@@ -23,6 +23,7 @@ import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polar
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
+import { createSubscription } from "../utils/billing.server";
 
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
@@ -109,6 +110,7 @@ interface LoaderData {
     planName: string;
     status: string;
   } | null;
+  success: boolean;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -116,6 +118,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   const user = await ensureUserExists(session.shop);
+  
+  // Check for success parameter (user returning from Shopify confirmation)
+  const url = new URL(request.url);
+  const success = url.searchParams.get("success") === "true";
 
   // Check current billing status using manual GraphQL
   let currentSubscription = null;
@@ -161,6 +167,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       credits: user.credits,
     },
     currentSubscription,
+    success,
   });
 };
 
@@ -188,31 +195,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ error: "Invalid plan selected" }, { status: 400 });
       }
 
-      console.log(`[BILLING] Initiating billing request for plan:`, planName);
-      console.log(`[BILLING] Environment check:`, {
-        nodeEnv: process.env.NODE_ENV,
-        isTest: process.env.NODE_ENV !== "production",
-        shopifyAppUrl: process.env.SHOPIFY_APP_URL,
-        returnUrl: `${process.env.SHOPIFY_APP_URL?.replace(/\/$/, '')}/app/pricing?success=true`
+      console.log(`[BILLING] Creating subscription for plan:`, planName);
+
+      // Create subscription using proper Shopify GraphQL API
+      const result = await createSubscription(request, planName);
+      
+      console.log(`[BILLING] Subscription created successfully:`, {
+        subscriptionId: result.subscriptionId,
+        confirmationUrl: result.confirmationUrl,
+        shop: session.shop,
+        planName
       });
       
-      // Redirect to Shopify's managed pricing page
-      console.log(`[BILLING] Redirecting to Shopify managed pricing page`);
-      
-      // Get the shop domain to construct the managed pricing URL
-      const shopDomain = session.shop;
-      const appHandle = "b1-bulk-product-seo-optimizer"; // Your app handle from shopify.app.toml
-      
-      // Shopify managed pricing URL pattern
-      const managedPricingUrl = `https://admin.shopify.com/store/${shopDomain.replace('.myshopify.com', '')}/charges/${appHandle}/pricing_plans`;
-      
-      console.log(`[BILLING] Redirecting to managed pricing:`, managedPricingUrl);
-      
-      // Redirect to Shopify's hosted pricing page
+      // Redirect to Shopify's confirmation page
       throw new Response(null, {
         status: 302,
         headers: {
-          Location: managedPricingUrl,
+          Location: result.confirmationUrl,
         },
       });
     } catch (error) {
@@ -262,8 +261,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       
       console.log(`[BILLING] Cancel GraphQL response:`, JSON.stringify(data, null, 2));
       
-      if (data.errors) {
-        throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+      if ((data as any).errors) {
+        throw new Error(`GraphQL errors: ${JSON.stringify((data as any).errors)}`);
       }
       
       const result = data.data?.appSubscriptionCancel;
@@ -466,10 +465,11 @@ const FAQItem = ({ question, answer, isOpen, onToggle }: {
 };
 
 export default function Pricing() {
-  const { user, currentSubscription } = useLoaderData<typeof loader>();
+  const { user, currentSubscription, success } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [showToast, setShowToast] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(success);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
 
   // Import plan constants for consistency
@@ -560,6 +560,13 @@ export default function Pricing() {
     <Toast
       content={('message' in actionData && typeof actionData.message === 'string' ? actionData.message : null) || "Plan updated successfully!"}
       onDismiss={() => setShowToast(false)}
+    />
+  ) : null;
+
+  const successToastMarkup = showSuccessToast ? (
+    <Toast
+      content="Subscription created successfully! Your plan is now active."
+      onDismiss={() => setShowSuccessToast(false)}
     />
   ) : null;
 
@@ -702,6 +709,7 @@ export default function Pricing() {
           </Box>
 
           {toastMarkup}
+          {successToastMarkup}
         </Page>
       </Frame>
   );

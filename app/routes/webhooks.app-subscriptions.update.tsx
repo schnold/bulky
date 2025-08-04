@@ -57,9 +57,17 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
       trialEnd,
       isTest,
     });
+    
+    console.log(`[WEBHOOK] Created new subscription record:`, {
+      subscriptionId: subscriptionRecord.id,
+      shopifySubscriptionId: subscription.id,
+      planName,
+      status
+    });
   } else {
     // Update existing subscription
     const updateData: any = {
+      planName,
       status,
       currentPeriodStart,
       currentPeriodEnd,
@@ -70,6 +78,14 @@ async function handleAppSubscriptionUpdate(shop: string, payload: any) {
     }
     
     await updateSubscription(subscription.id, updateData);
+    
+    console.log(`[WEBHOOK] Updated existing subscription:`, {
+      subscriptionId: subscriptionRecord.id,
+      shopifySubscriptionId: subscription.id,
+      planName,
+      status,
+      updateData
+    });
   }
 
   // Update user plan and credits based on subscription status

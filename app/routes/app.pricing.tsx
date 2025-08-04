@@ -221,12 +221,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         isManaged: result.isManaged
       });
       
-      // Server-side redirect to Shopify's confirmation page
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: result.confirmationUrl,
-        },
+      // Return the URL to the client for iframe breakout redirect
+      return json({ 
+        redirectUrl: result.confirmationUrl,
+        isManaged: result.isManaged 
       });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
@@ -522,7 +520,34 @@ export default function Pricing() {
     }
   }, [success]);
 
-  // Note: Using server-side redirects with Billing API, no client-side redirect logic needed
+  // Handle billing API confirmation URL redirect (also needs iframe breakout)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasProcessedRedirect = urlParams.get('processed') === 'true';
+    
+    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle' && !hasProcessedRedirect) {
+      console.log('[BILLING] Redirecting to billing confirmation URL:', actionData.redirectUrl);
+      
+      // Add processed flag to prevent re-redirects when returning to this page
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('processed', 'true');
+      window.history.replaceState({}, '', currentUrl.toString());
+      
+      // Use immediate redirect - no timeout needed
+      try {
+        // Try App Bridge redirect first for better embedded app handling
+        if (window.parent !== window) {
+          window.parent.location.href = actionData.redirectUrl;
+        } else {
+          window.location.href = actionData.redirectUrl;
+        }
+      } catch (error) {
+        // Fallback to window.top if App Bridge fails
+        console.warn('[BILLING] App Bridge redirect failed, using window.top:', error);
+        window.top!.location.href = actionData.redirectUrl;
+      }
+    }
+  }, [actionData, navigation.state]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const app = useAppBridge();
 

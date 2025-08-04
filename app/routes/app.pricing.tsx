@@ -521,11 +521,24 @@ export default function Pricing() {
 
   // Handle managed pricing redirect
   useEffect(() => {
-    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) {
-      // Break out of iframe and redirect to Shopify's managed pricing page
-      window.top!.location.href = actionData.redirectUrl;
+    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle') {
+      console.log('[BILLING] Redirecting to managed pricing URL:', actionData.redirectUrl);
+      
+      // Use immediate redirect - no timeout needed
+      try {
+        // Try App Bridge redirect first for better embedded app handling
+        if (window.parent !== window) {
+          window.parent.location.href = actionData.redirectUrl;
+        } else {
+          window.location.href = actionData.redirectUrl;
+        }
+      } catch (error) {
+        // Fallback to window.top if App Bridge fails
+        console.warn('[BILLING] App Bridge redirect failed, using window.top:', error);
+        window.top!.location.href = actionData.redirectUrl;
+      }
     }
-  }, [actionData]);
+  }, [actionData, navigation.state]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const app = useAppBridge();
 

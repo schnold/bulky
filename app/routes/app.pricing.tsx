@@ -512,7 +512,13 @@ export default function Pricing() {
   const navigation = useNavigation();
   const [showToast, setShowToast] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   
+  // Set client flag to avoid hydration issues
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   // Handle success parameter from URL
   useEffect(() => {
     if (success) {
@@ -522,32 +528,33 @@ export default function Pricing() {
 
   // Handle billing API confirmation URL redirect (also needs iframe breakout)
   useEffect(() => {
+    // Only run on client side to avoid hydration issues
+    if (!isClient) return;
+    
     const urlParams = new URLSearchParams(window.location.search);
     const hasProcessedRedirect = urlParams.get('processed') === 'true';
+    const hasBillingRedirect = urlParams.get('billing_redirect') === 'true';
     
-    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle' && !hasProcessedRedirect) {
+    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle' && !hasProcessedRedirect && !hasBillingRedirect) {
       console.log('[BILLING] Redirecting to billing confirmation URL:', actionData.redirectUrl);
       
-      // Add processed flag to prevent re-redirects when returning to this page
-      const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.set('processed', 'true');
-      window.history.replaceState({}, '', currentUrl.toString());
+      // Navigate to a clean URL first to clear actionData, then redirect
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('processed'); // Clean any existing processed flags
+      cleanUrl.searchParams.set('billing_redirect', 'true'); // Temporary flag
       
-      // Use immediate redirect - no timeout needed
-      try {
-        // Try App Bridge redirect first for better embedded app handling
-        if (window.parent !== window) {
-          window.parent.location.href = actionData.redirectUrl;
-        } else {
-          window.location.href = actionData.redirectUrl;
-        }
-      } catch (error) {
-        // Fallback to window.top if App Bridge fails
-        console.warn('[BILLING] App Bridge redirect failed, using window.top:', error);
+      // Clear actionData by navigating to clean URL, then immediately redirect
+      window.history.replaceState({}, '', cleanUrl.toString());
+      
+      // Very small delay to ensure state is updated, then redirect
+      const timer = setTimeout(() => {
+        // Break out of iframe using window.top for more reliable redirection
         window.top!.location.href = actionData.redirectUrl;
-      }
+      }, 50);
+      
+      return () => clearTimeout(timer);
     }
-  }, [actionData, navigation.state]);
+  }, [actionData, navigation.state, isClient]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const app = useAppBridge();
 

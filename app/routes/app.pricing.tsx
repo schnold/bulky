@@ -220,12 +220,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         isManaged: result.isManaged
       });
       
-      // Server-side redirect to Shopify's managed pricing page
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: result.confirmationUrl,
-        },
+      // Return the URL to the client for iframe breakout redirect
+      return json({ 
+        redirectUrl: result.confirmationUrl,
+        isManaged: result.isManaged 
       });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
@@ -520,6 +518,14 @@ export default function Pricing() {
       setShowSuccessToast(true);
     }
   }, [success]);
+
+  // Handle managed pricing redirect
+  useEffect(() => {
+    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) {
+      // Break out of iframe and redirect to Shopify's managed pricing page
+      window.top!.location.href = actionData.redirectUrl;
+    }
+  }, [actionData]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   const app = useAppBridge();
 

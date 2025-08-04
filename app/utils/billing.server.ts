@@ -165,9 +165,9 @@ export async function createManagedPricingUrl(request: Request, planName: string
   
   const baseUrl = urlFormats[urlFormat] || urlFormats.charges;
   
-  // Add minimal embedded app parameters
+  // For managed pricing, we need to break out of the iframe
+  // Don't set embedded=1 as it causes X-Frame-Options issues
   const url = new URL(baseUrl);
-  url.searchParams.set('embedded', '1');
   url.searchParams.set('shop', shopDomain);
   
   const managedPricingUrl = url.toString();

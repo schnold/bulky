@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, useNavigation } from "@remix-run/react";
@@ -20,7 +20,7 @@ import {
   Collapsible,
 } from "@shopify/polaris";
 import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polaris-icons";
-import { TitleBar } from "@shopify/app-bridge-react";
+import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
 import { createManagedPricingUrl } from "../utils/billing.server";
@@ -207,12 +207,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         isManaged: result.isManaged
       });
       
-      // Redirect to Shopify's managed pricing page
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: result.confirmationUrl,
-        },
+      // Return the URL for App Bridge redirect (to break out of iframe)
+      return json({ 
+        success: true, 
+        redirectUrl: result.confirmationUrl,
+        message: "Redirecting to Shopify billing..." 
       });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
@@ -471,6 +470,7 @@ export default function Pricing() {
   const [showToast, setShowToast] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(success);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
+  const app = useAppBridge();
 
   // Import plan constants for consistency
   const IMPORTED_STARTER_PLAN = "starter_plan";
@@ -478,6 +478,21 @@ export default function Pricing() {
   const IMPORTED_ENTERPRISE_PLAN = "enterprise_plan";
 
   const isLoading = navigation.state === "submitting";
+
+  // Handle App Bridge redirect for managed pricing
+  useEffect(() => {
+    if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) {
+      console.log('[BILLING] Redirecting with App Bridge to:', actionData.redirectUrl);
+      // Use window.top to break out of iframe and redirect the parent window
+      const url = actionData.redirectUrl as string;
+      if (window.top) {
+        window.top.location.href = url;
+      } else {
+        // Fallback if window.top is not available
+        window.location.href = url;
+      }
+    }
+  }, [actionData]);
 
   // Helper function to check if current plan matches
   const isCurrentPlan = (planKey: string) => {
@@ -560,6 +575,13 @@ export default function Pricing() {
     <Toast
       content={('message' in actionData && typeof actionData.message === 'string' ? actionData.message : null) || "Plan updated successfully!"}
       onDismiss={() => setShowToast(false)}
+    />
+  ) : null;
+
+  const redirectToastMarkup = (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) ? (
+    <Toast
+      content="Redirecting to Shopify billing page..."
+      onDismiss={() => {}}
     />
   ) : null;
 
@@ -714,6 +736,7 @@ export default function Pricing() {
 
           {toastMarkup}
           {successToastMarkup}
+          {redirectToastMarkup}
         </Page>
       </Frame>
   );

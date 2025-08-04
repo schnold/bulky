@@ -208,20 +208,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     try {
-      console.log(`[BILLING] Creating app subscription for plan:`, planName);
+      console.log(`[BILLING] Creating managed pricing URL for plan:`, planName);
 
-      // Create app subscription using GraphQL API (eliminates shop URL prompts)
-      const result = await createAppSubscription(request, planName);
+      // Use managed pricing URL instead of billing API for Managed Pricing Apps
+      const result = await createManagedPricingUrl(request, planName);
       
-      console.log(`[BILLING] App subscription created successfully:`, {
+      console.log(`[BILLING] Managed pricing URL created successfully:`, {
         confirmationUrl: result.confirmationUrl,
         shop: session.shop,
         planName,
-        subscriptionId: result.appSubscription?.id,
         isManaged: result.isManaged
       });
       
-      // Server-side redirect to Shopify's confirmation page
+      // Server-side redirect to Shopify's managed pricing page
       return new Response(null, {
         status: 302,
         headers: {

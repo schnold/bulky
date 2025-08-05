@@ -20,17 +20,14 @@ import {
   Collapsible,
 } from "@shopify/polaris";
 import { CheckIcon, XIcon, ChevronDownIcon, ChevronUpIcon } from "@shopify/polaris-icons";
-import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import { TitleBar } from "@shopify/app-bridge-react";
+import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
-import { createManagedPricingUrl, createAppSubscription } from "../utils/billing.server";
-import { manuallyUpdateUserPlan, syncUserPlanWithSubscription, updateUserPlanAndAddCredits } from "../models/user.server";
+import { createAppSubscription } from "../utils/billing.server";
+import { manuallyUpdateUserPlan, syncUserPlanWithSubscription } from "../models/user.server";
 
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
-const STARTER_PLAN = "Starter Plan";
-const PRO_PLAN = "Pro Plan";
-const ENTERPRISE_PLAN = "Enterprise Plan";
 
 interface PlanFeature {
   name: string;
@@ -116,7 +113,6 @@ interface LoaderData {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   let user = await ensureUserExists(session.shop);
   
@@ -195,11 +191,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const { STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } = await import("../shopify.server");
 
   const formData = await request.formData();
   const intent = formData.get("intent");
-  const planName = formData.get("plan") as string;
+  const rawPlan = formData.get("plan") as string;
+
+  // Normalize incoming client plan aliases to canonical plan names expected by billing
+  const PLAN_ALIAS_MAP: Record<string, string> = {
+    starter_plan: STARTER_PLAN,
+    pro_plan: PRO_PLAN,
+    enterprise_plan: ENTERPRISE_PLAN,
+    // Allow Free Plan pass-through (not billed)
+    "Free Plan": "Free Plan",
+    // Also accept canonical names directly
+    "Starter Plan": STARTER_PLAN,
+    "Pro Plan": PRO_PLAN,
+    "Enterprise Plan": ENTERPRISE_PLAN,
+  };
+  const planName = PLAN_ALIAS_MAP[rawPlan];
 
   if (intent === "subscribe") {
     console.log(`[BILLING] Subscribe request initiated:`, {
@@ -209,10 +218,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       timestamp: new Date().toISOString()
     });
     
-    // Validate plan name exists
+    // Validate plan name exists (after normalization)
     const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
-    if (!validPlans.includes(planName)) {
-      console.error(`[BILLING] Invalid plan selected:`, { planName, validPlans });
+    if (!planName || !validPlans.includes(planName)) {
+      console.error(`[BILLING] Invalid plan selected:`, { rawPlan, resolvedPlan: planName, validPlans });
       return json({ error: "Invalid plan selected" }, { status: 400 });
     }
 
@@ -614,7 +623,7 @@ export default function Pricing() {
     }
   }, [actionData, navigation.state, isClient]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
-  const app = useAppBridge();
+  // const app = useAppBridge();
 
   // Import plan constants for consistency
   const IMPORTED_STARTER_PLAN = "starter_plan";
@@ -939,7 +948,7 @@ export default function Pricing() {
                   period="per month"
                   description="For large stores with unlimited optimization needs"
                   features={planFeatures.map(f => f.enterprise)}
-                  buttonText={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN) || isUserOnPlan(IMPORTED_ENTERPRISE_PLAN) ? "Current Plan" : "Contact Sales"}
+                  buttonText={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN) || isUserOnPlan(IMPORTED_ENTERPRISE_PLAN) ? "Current Plan" : "Choose Plan"}
                   buttonVariant="secondary"
                   isCurrentPlan={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN) || isUserOnPlan(IMPORTED_ENTERPRISE_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_ENTERPRISE_PLAN)}

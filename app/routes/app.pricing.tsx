@@ -624,13 +624,15 @@ export default function Pricing() {
         window.history.replaceState({}, "", cleanUrl.toString());
 
         // Force full page navigation to break out of any problematic iframe context
-        (window.top || window).location.assign((actionData as any).redirectUrl as string);
+        // Use window.location to avoid cross-origin frame access errors when embedded
+        window.location.assign((actionData as any).redirectUrl as string);
       }
     } catch (error) {
       console.error("[BILLING] Error in redirect handler:", error);
       // Fallback: still try to redirect even if there's an error
       try {
-        (window.top || window).location.assign((actionData as any).redirectUrl as string);
+        // Avoid cross-origin operation on window.top
+        window.location.href = (actionData as any).redirectUrl as string;
       } catch {
         // no-op
       }

@@ -389,7 +389,7 @@ export default function Index() {
                     variant="primary"
                     fullWidth
                     disabled={user.plan !== "free"}
-                    onClick={() => user.plan === "free" && navigate("/app/pricing")}
+                  onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
                   >
                     {user.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
                   </Button>

@@ -1,5 +1,6 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import { Link, Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider, Frame } from "@shopify/polaris";
@@ -25,6 +26,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const host = searchParams.get("host");
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
@@ -34,9 +37,9 @@ export default function App() {
             <Link to="/app" rel="home">
               Home
             </Link>
-            <Link to="/app/products">SEO Optimization</Link>
-            <Link to="/app/pricing">Pricing</Link>
-            <Link to="/app/help">Help & Support</Link>
+            <Link to={`/app/products${host ? `?host=${host}` : ''}`}>SEO Optimization</Link>
+            <Link to={`/app/pricing${host ? `?host=${host}` : ''}`}>Pricing</Link>
+            <Link to={`/app/help${host ? `?host=${host}` : ''}`}>Help & Support</Link>
           </NavMenu>
           <Outlet />
         </Frame>

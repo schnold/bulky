@@ -14,11 +14,15 @@ import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopif
 import { getUserByShop } from "../models/user.server";
 
 export async function requireBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
+  const { session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const host = url.searchParams.get("host");
+
   const hasSubscription = await hasActiveSubscription(request);
   
   if (!hasSubscription) {
     // Redirect to pricing page - this will redirect to Shopify's managed pricing
-    throw redirect("/app/pricing");
+    throw redirect(`/app/pricing${host ? `?host=${host}` : ''}`);
   }
   
   return { hasActivePayment: true };
@@ -81,18 +85,20 @@ export async function getCurrentSubscription(request: Request) {
 
 export async function checkCreditsAndBilling(request: Request, requiredCredits: number = 1) {
   const { session } = await authenticate.admin(request);
+  const url = new URL(request.url);
+  const host = url.searchParams.get("host");
   
   // Check if user has enough credits
   const user = await getUserByShop(session.shop);
   if (!user) {
-    throw redirect("/app/pricing");
+    throw redirect(`/app/pricing${host ? `?host=${host}` : ''}`);
   }
 
   if (user.credits < requiredCredits) {
     // If no credits, check if they have an active subscription
     const hasSubscription = await hasActiveSubscription(request);
     if (!hasSubscription) {
-      throw redirect("/app/pricing");
+      throw redirect(`/app/pricing${host ? `?host=${host}` : ''}`);
     }
     
     // If they have a subscription but no credits, they might be on a usage-based plan

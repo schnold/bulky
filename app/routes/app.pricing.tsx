@@ -601,8 +601,6 @@ export default function Pricing() {
   // Handle billing API confirmation URL redirect (also needs iframe breakout)
   // Accept both redirectUrl (current project) and confirmationUrl (compat)
   useEffect(() => {
-    // Only run on client side to avoid hydration issues
-    if (!isClient) return;
     // Prevent double-execution in StrictMode or due to re-render
     if (didRedirectRef.current) return;
 
@@ -670,7 +668,7 @@ export default function Pricing() {
         // no-op
       }
     }
-  }, [actionData, navigation.state, isClient]);
+  }, [actionData, navigation.state]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   // const app = useAppBridge();
 

@@ -599,27 +599,40 @@ export default function Pricing() {
   useEffect(() => {
     // Only run on client side to avoid hydration issues
     if (!isClient) return;
-    
+
+    // Guard: ensure actionData shape before accessing properties
+    const hasRedirect =
+      !!actionData &&
+      typeof actionData === "object" &&
+      "redirectUrl" in (actionData as any) &&
+      typeof (actionData as any).redirectUrl === "string" &&
+      (actionData as any).redirectUrl.length > 0;
+
+    if (!hasRedirect) return;
+    if (navigation.state !== "idle") return;
+
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const hasProcessedRedirect = urlParams.get('processed') === 'true';
-      
-      if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl && navigation.state === 'idle' && !hasProcessedRedirect) {
-        console.log('[BILLING] Redirecting to billing confirmation URL:', actionData.redirectUrl);
-        
+      const hasProcessedRedirect = urlParams.get("processed") === "true";
+
+      if (!hasProcessedRedirect) {
+        console.log("[BILLING] Redirecting to billing confirmation URL:", (actionData as any).redirectUrl);
+
         // Set processed flag immediately to prevent re-execution
         const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.set('processed', 'true');
-        window.history.replaceState({}, '', cleanUrl.toString());
-        
+        cleanUrl.searchParams.set("processed", "true");
+        window.history.replaceState({}, "", cleanUrl.toString());
+
         // Force full page navigation to break out of any problematic iframe context
-        window.top!.location.replace(actionData.redirectUrl);
+        (window.top || window).location.assign((actionData as any).redirectUrl as string);
       }
     } catch (error) {
-      console.error('[BILLING] Error in redirect handler:', error);
+      console.error("[BILLING] Error in redirect handler:", error);
       // Fallback: still try to redirect even if there's an error
-      if (actionData && 'redirectUrl' in actionData && actionData.redirectUrl) {
-        window.top!.location.href = actionData.redirectUrl;
+      try {
+        (window.top || window).location.assign((actionData as any).redirectUrl as string);
+      } catch {
+        // no-op
       }
     }
   }, [actionData, navigation.state, isClient]);
@@ -690,38 +703,29 @@ export default function Pricing() {
   const handleSubscribe = async (planName: string) => {
     // Get the host from the current URL to preserve embedded context
     const urlParams = new URLSearchParams(window.location.search);
-    const host = urlParams.get('host');
+    const host = urlParams.get("host");
+
     // Skip form submission for free plan since it doesn't require billing
     if (planName === FREE_PLAN) {
       return;
     }
 
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.style.display = "none";
+    // Use fetch+transition to avoid DOM mutation during render cycle that can trigger React invariant errors
+    try {
+      const formData = new FormData();
+      formData.set("intent", "subscribe");
+      formData.set("plan", planName);
+      if (host) formData.set("host", host);
 
-    const intentInput = document.createElement("input");
-    intentInput.type = "hidden";
-    intentInput.name = "intent";
-    intentInput.value = "subscribe";
-    form.appendChild(intentInput);
-
-    const planInput = document.createElement("input");
-    planInput.type = "hidden";
-    planInput.name = "plan";
-    planInput.value = planName;
-    form.appendChild(planInput);
-
-    if (host) {
-      const hostInput = document.createElement("input");
-      hostInput.type = "hidden";
-      hostInput.name = "host";
-      hostInput.value = host;
-      form.appendChild(hostInput);
+      // Submit via fetch to let Remix update actionData; redirect happens in useEffect
+      await fetch(window.location.pathname + window.location.search, {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+      });
+    } catch (e) {
+      console.error("[BILLING] Failed to submit subscribe action:", e);
     }
-
-    document.body.appendChild(form);
-    form.submit();
   };
 
   const handleCancel = () => {

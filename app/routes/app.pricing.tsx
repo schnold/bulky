@@ -195,6 +195,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const intent = formData.get("intent");
   const rawPlan = formData.get("plan") as string;
+  const host = formData.get("host") as string | undefined;
 
   // Normalize incoming client plan aliases to canonical plan names expected by billing
   const PLAN_ALIAS_MAP: Record<string, string> = {
@@ -229,7 +230,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[BILLING] Creating app subscription for plan:`, planName);
 
       // Create app subscription using GraphQL API (eliminates shop URL prompts)
-      const result = await createAppSubscription(request, planName);
+      const result = await createAppSubscription(request, planName, host);
       
       console.log(`[BILLING] App subscription created successfully:`, {
         confirmationUrl: result.confirmationUrl,
@@ -687,6 +688,9 @@ export default function Pricing() {
   ];
 
   const handleSubscribe = async (planName: string) => {
+    // Get the host from the current URL to preserve embedded context
+    const urlParams = new URLSearchParams(window.location.search);
+    const host = urlParams.get('host');
     // Skip form submission for free plan since it doesn't require billing
     if (planName === FREE_PLAN) {
       return;
@@ -707,6 +711,14 @@ export default function Pricing() {
     planInput.name = "plan";
     planInput.value = planName;
     form.appendChild(planInput);
+
+    if (host) {
+      const hostInput = document.createElement("input");
+      hostInput.type = "hidden";
+      hostInput.name = "host";
+      hostInput.value = host;
+      form.appendChild(hostInput);
+    }
 
     document.body.appendChild(form);
     form.submit();

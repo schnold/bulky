@@ -197,7 +197,11 @@ export async function createManagedPricingUrl(request: Request, planName: string
 
 // API-based billing using appSubscriptionCreate mutation
 // This provides better control and eliminates shop URL prompts
-export async function createAppSubscription(request: Request, planName: string) {
+export async function createAppSubscription(
+  request: Request,
+  planName: string,
+  host?: string,
+) {
   const { session, admin } = await authenticate.admin(request);
   
   // Validate plan name
@@ -215,9 +219,7 @@ export async function createAppSubscription(request: Request, planName: string) 
 
   const config = planConfig[planName];
 
-  // Extract host (if present) to preserve embedded context on return
-  const url = new URL(request.url);
-  const host = url.searchParams.get("host") || undefined;
+  // The host parameter is now passed in directly to preserve embedded context
 
   // Use dedicated subscription callback route and include shop, host, and planKey
   const callbackUrl = new URL("/app/subscription-callback", process.env.SHOPIFY_APP_URL || "http://localhost:3000");

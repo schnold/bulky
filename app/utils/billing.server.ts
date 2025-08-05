@@ -14,6 +14,7 @@ import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopif
 import { getUserByShop } from "../models/user.server";
 
 export async function requireBilling(request: Request, plans: (typeof STARTER_PLAN | typeof PRO_PLAN | typeof ENTERPRISE_PLAN)[] = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN]) {
+  // Authenticate to ensure we have a valid admin session; session.shop is used for shop scoping
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const host = url.searchParams.get("host");
@@ -21,8 +22,11 @@ export async function requireBilling(request: Request, plans: (typeof STARTER_PL
   const hasSubscription = await hasActiveSubscription(request);
   
   if (!hasSubscription) {
-    // Redirect to pricing page - this will redirect to Shopify's managed pricing
-    throw redirect(`/app/pricing${host ? `?host=${host}` : ''}`);
+    // Redirect to pricing page, preserving embedded context via host and shop for authentication on pricing page
+    const qp = new URLSearchParams();
+    if (host) qp.set("host", host);
+    if (session?.shop) qp.set("shop", session.shop);
+    throw redirect(`/app/pricing${qp.toString() ? `?${qp.toString()}` : ""}`);
   }
   
   return { hasActivePayment: true };
@@ -84,6 +88,7 @@ export async function getCurrentSubscription(request: Request) {
 }
 
 export async function checkCreditsAndBilling(request: Request, requiredCredits: number = 1) {
+  // Authenticate and use session.shop for fetching user and preserving pricing redirects
   const { session } = await authenticate.admin(request);
   const url = new URL(request.url);
   const host = url.searchParams.get("host");
@@ -91,14 +96,20 @@ export async function checkCreditsAndBilling(request: Request, requiredCredits: 
   // Check if user has enough credits
   const user = await getUserByShop(session.shop);
   if (!user) {
-    throw redirect(`/app/pricing${host ? `?host=${host}` : ''}`);
+    const qp = new URLSearchParams();
+    if (host) qp.set("host", host);
+    if (session?.shop) qp.set("shop", session.shop);
+    throw redirect(`/app/pricing${qp.toString() ? `?${qp.toString()}` : ""}`);
   }
 
   if (user.credits < requiredCredits) {
     // If no credits, check if they have an active subscription
     const hasSubscription = await hasActiveSubscription(request);
     if (!hasSubscription) {
-      throw redirect(`/app/pricing${host ? `?host=${host}` : ''}`);
+      const qp = new URLSearchParams();
+      if (host) qp.set("host", host);
+      if (session?.shop) qp.set("shop", session.shop);
+      throw redirect(`/app/pricing${qp.toString() ? `?${qp.toString()}` : ""}`);
     }
     
     // If they have a subscription but no credits, they might be on a usage-based plan
@@ -145,7 +156,10 @@ export function getPlanLimits(planName: string) {
 // Managed pricing app configuration
 // This app uses Shopify's managed pricing, so billing is handled by Shopify's interface
 export async function createManagedPricingUrl(request: Request, planName: string) {
+  // Authenticate and use session.shop to scope pricing; also preserve host for embedded context
   const { session } = await authenticate.admin(request);
+  const reqUrl = new URL(request.url);
+  const host = reqUrl.searchParams.get("host") || undefined;
   
   // Validate plan name
   const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
@@ -174,7 +188,9 @@ export async function createManagedPricingUrl(request: Request, planName: string
   // For managed pricing, we need to break out of the iframe
   // Don't set embedded=1 as it causes X-Frame-Options issues
   const url = new URL(baseUrl);
-  url.searchParams.set('shop', shopDomain);
+  // Preserve authentication/embedded context across redirects
+  url.searchParams.set("shop", shopDomain);
+  if (host) url.searchParams.set("host", host);
   
   // Add plan-specific parameter if needed
   if (planName !== 'starter_plan') {
@@ -192,7 +208,8 @@ export async function createManagedPricingUrl(request: Request, planName: string
     embedded: false,
     urlFormat,
     availableFormats: Object.keys(urlFormats),
-    selectedFormat: baseUrl
+    selectedFormat: baseUrl,
+    host
   });
 
   return {

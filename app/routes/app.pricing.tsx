@@ -640,9 +640,15 @@ export default function Pricing() {
         if (typeof window !== "undefined") {
           // In embedded apps, ensure we break out of iframe
           try {
-            (window.top || window).location.assign(redirectUrl as string);
+            // Use href instead of assign for more aggressive iframe breakout
+            if (window.top && window.top !== window) {
+              window.top.location.href = redirectUrl as string;
+            } else {
+              window.location.href = redirectUrl as string;
+            }
           } catch {
-            window.location.assign(redirectUrl as string);
+            // Fallback if cross-origin restrictions prevent access to window.top
+            window.location.href = redirectUrl as string;
           }
         }
       }
@@ -652,7 +658,11 @@ export default function Pricing() {
       try {
         // Avoid cross-origin operation on window.top
         try {
-          (window.top || window).location.href = redirectUrl as string;
+          if (window.top && window.top !== window) {
+            window.top.location.href = redirectUrl as string;
+          } else {
+            window.location.href = redirectUrl as string;
+          }
         } catch {
           window.location.href = redirectUrl as string;
         }

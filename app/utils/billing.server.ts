@@ -207,14 +207,24 @@ export async function createAppSubscription(request: Request, planName: string) 
   }
 
   // Plan pricing configuration
-  const planConfig: { [key: string]: { amount: number; name: string } } = {
-    [STARTER_PLAN]: { amount: 9.99, name: "Starter Plan" },
-    [PRO_PLAN]: { amount: 29.99, name: "Pro Plan" },
-    [ENTERPRISE_PLAN]: { amount: 59.99, name: "Enterprise Plan" }
+  const planConfig: { [key: string]: { amount: number; name: string; planKey: string } } = {
+    [STARTER_PLAN]: { amount: 9.99, name: "Starter Plan", planKey: "starter_plan" },
+    [PRO_PLAN]: { amount: 29.99, name: "Pro Plan", planKey: "pro_plan" },
+    [ENTERPRISE_PLAN]: { amount: 59.99, name: "Enterprise Plan", planKey: "enterprise_plan" }
   };
 
   const config = planConfig[planName];
-  const returnUrl = `${process.env.SHOPIFY_APP_URL}/app/pricing?success=true&shop=${session.shop}`;
+
+  // Extract host (if present) to preserve embedded context on return
+  const url = new URL(request.url);
+  const host = url.searchParams.get("host") || undefined;
+
+  // Use dedicated subscription callback route and include shop, host, and planKey
+  const callbackUrl = new URL("/app/subscription-callback", process.env.SHOPIFY_APP_URL || "http://localhost:3000");
+  callbackUrl.searchParams.set("shop", session.shop);
+  if (host) callbackUrl.searchParams.set("host", host);
+  callbackUrl.searchParams.set("planKey", config.planKey);
+  const returnUrl = callbackUrl.toString();
 
   const mutation = `
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
@@ -283,28 +293,24 @@ export async function createAppSubscription(request: Request, planName: string) 
     }
 
     const result = data.data?.appSubscriptionCreate;
-    if (result?.userErrors?.length > 0) {
+    if (!result) {
+      throw new Error("No appSubscriptionCreate payload in response");
+    }
+    if (Array.isArray(result.userErrors) && result.userErrors.length > 0) {
       throw new Error(`Subscription creation errors: ${JSON.stringify(result.userErrors)}`);
     }
 
-    if (!result?.confirmationUrl) {
+    if (!result.confirmationUrl) {
       throw new Error("No confirmation URL received from Shopify");
     }
 
-    // Ensure the confirmation URL includes the shop parameter for session preservation
-    const confirmationUrl = new URL(result.confirmationUrl);
-    if (!confirmationUrl.searchParams.has('shop')) {
-      confirmationUrl.searchParams.set('shop', session.shop);
-    }
-    
-    const finalConfirmationUrl = confirmationUrl.toString();
+    // Do not mutate Shopify's confirmation URL; just return it
+    const finalConfirmationUrl = result.confirmationUrl;
 
     console.log(`[BILLING] Subscription created successfully:`, {
       subscriptionId: result.appSubscription?.id,
-      originalConfirmationUrl: result.confirmationUrl,
-      finalConfirmationUrl,
-      shop: session.shop,
-      shopParamAdded: !new URL(result.confirmationUrl).searchParams.has('shop')
+      confirmationUrl: finalConfirmationUrl,
+      shop: session.shop
     });
 
     return {

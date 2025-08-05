@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, useNavigation } from "@remix-run/react";
+import { useLoaderData, useActionData, useNavigation, useSubmit } from "@remix-run/react";
 import {
   Page,
   Card,
@@ -562,6 +562,8 @@ export default function Pricing() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [showToast, setShowToast] = useState(false);
+  const submit = useSubmit();
+  const didRedirectRef = useRef(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [isClient, setIsClient] = useState(false);
   
@@ -601,6 +603,8 @@ export default function Pricing() {
   useEffect(() => {
     // Only run on client side to avoid hydration issues
     if (!isClient) return;
+    // Prevent double-execution in StrictMode or due to re-render
+    if (didRedirectRef.current) return;
 
     // Guard: ensure actionData shape before accessing properties
     const redirectUrl: string | undefined = (() => {
@@ -627,6 +631,8 @@ export default function Pricing() {
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.set("processed", "true");
         window.history.replaceState({}, "", cleanUrl.toString());
+        // Also gate via ref to avoid StrictMode double-invoke issues
+        didRedirectRef.current = true;
 
         // Force full page navigation to break out of any problematic iframe context
         // Use window.location to avoid cross-origin frame access errors when embedded
@@ -736,35 +742,17 @@ export default function Pricing() {
       return;
     }
 
-    // Prefer Remix fetcher via form submit to ensure actionData is populated
+    // Use Remix's useSubmit to avoid direct DOM form mutation during hydration
     try {
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = window.location.pathname + window.location.search;
-      form.style.display = "none";
+      const formData = new FormData();
+      formData.set("intent", "subscribe");
+      formData.set("plan", planName);
+      if (host) formData.set("host", host);
 
-      const intentInput = document.createElement("input");
-      intentInput.type = "hidden";
-      intentInput.name = "intent";
-      intentInput.value = "subscribe";
-      form.appendChild(intentInput);
-
-      const planInput = document.createElement("input");
-      planInput.type = "hidden";
-      planInput.name = "plan";
-      planInput.value = planName;
-      form.appendChild(planInput);
-
-      if (host) {
-        const hostInput = document.createElement("input");
-        hostInput.type = "hidden";
-        hostInput.name = "host";
-        hostInput.value = host;
-        form.appendChild(hostInput);
-      }
-
-      document.body.appendChild(form);
-      form.submit();
+      // Defer to next frame to avoid any hydration contention
+      requestAnimationFrame(() => {
+        submit(formData, { method: "post" });
+      });
     } catch (e) {
       console.error("[BILLING] Failed to submit subscribe action:", e);
     }

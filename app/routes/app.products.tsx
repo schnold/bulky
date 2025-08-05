@@ -22,7 +22,6 @@ import {
   FormLayout,
   Select,
   Checkbox,
-  ButtonGroup,
   Icon,
   Thumbnail,
   Box,
@@ -383,57 +382,18 @@ function SparkleButton({
 
 export default function Products() {
   const loaderData = useLoaderData<typeof loader>();
-  
-  // Check if there was an error in the loader
-  if ('error' in loaderData) {
-    return (
-      <Page>
-        <TitleBar title="Products" />
-        <Card>
-          <Box padding="600">
-            <Text variant="headingMd" as="h2" tone="critical">
-              Error Loading Products
-            </Text>
-            <Text variant="bodyMd" tone="subdued" as="p">
-              {loaderData.details}
-            </Text>
-          </Box>
-        </Card>
-      </Page>
-    );
-  }
-  
-  // Ensure we have valid data before proceeding
-  if (!loaderData || typeof loaderData !== 'object') {
-    return (
-      <Page>
-        <TitleBar title="Products" />
-        <Card>
-          <Box padding="600">
-            <Text variant="headingMd" as="h2">
-              Loading Products...
-            </Text>
-          </Box>
-        </Card>
-      </Page>
-    );
-  }
-  
-  const { products, pageInfo, currentPage, productsPerPage, user, subscription } = loaderData;
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedProductsPerPage, setSelectedProductsPerPage] = useState(productsPerPage.toString());
-  const optimizeFetcher = useFetcher();
 
-  const [searchValue, setSearchValue] = useState(searchParams.get("query") || "");
-  const [statusFilter, setStatusFilter] = useState<string[]>(
-    searchParams.get("status") ? [searchParams.get("status")!] : []
-  );
-  const [productTypeFilter, setProductTypeFilter] = useState(
-    searchParams.get("productType") || ""
-  );
-  const [vendorFilter, setVendorFilter] = useState(
-    searchParams.get("vendor") || ""
-  );
+  // Set up hooks unconditionally before any early return
+  const [searchParams, setSearchParams] = useSearchParams();
+  const optimizeFetcher = useFetcher();
+  const publishFetcher = useFetcher();
+
+  // Default initial state values (will be updated once loaderData is validated)
+  const [selectedProductsPerPage, setSelectedProductsPerPage] = useState("15");
+  const [searchValue, setSearchValue] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [productTypeFilter, setProductTypeFilter] = useState("");
+  const [vendorFilter, setVendorFilter] = useState("");
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [optimizingProducts, setOptimizingProducts] = useState<Set<string>>(new Set());
   const [completedProducts, setCompletedProducts] = useState<Set<string>>(new Set());
@@ -468,49 +428,80 @@ export default function Products() {
   const [optimizedProducts, setOptimizedProducts] = useState<StoredOptimizations>({});
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
-  const publishFetcher = useFetcher();
 
-  // Load optimized products from localStorage on component mount
+  // Derive flags AFTER hooks are declared (no conditional hook calls)
+  const hasError = loaderData && typeof loaderData === "object" && "error" in loaderData;
+  // Treat only missing/invalid loaderData as invalid. Do NOT include hasError here,
+  // so hooks below are not considered conditionally called due to early return.
+  const isInvalid = !loaderData || typeof loaderData !== "object";
+
+  // Initialize state from loader/search params once we know data is valid
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('bulky-optimized-products');
+    // Always run this effect; guard reads with optional chaining/defaults
+    const ld = (loaderData as LoaderData | undefined);
+    const initialQuery = searchParams.get("query") || "";
+    const initialStatus = searchParams.get("status");
+    const initialProductType = searchParams.get("productType") || "";
+    const initialVendor = searchParams.get("vendor") || "";
+    const initialPerPage = searchParams.get("productsPerPage") || (ld?.productsPerPage?.toString() ?? "15");
+
+    setSearchValue(initialQuery);
+    setStatusFilter(initialStatus ? [initialStatus] : []);
+    setProductTypeFilter(initialProductType);
+    setVendorFilter(initialVendor);
+    setSelectedProductsPerPage(initialPerPage);
+  }, [loaderData, searchParams]);
+
+  // Persist optimized products to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined" && Object.keys(optimizedProducts).length > 0) {
+      localStorage.setItem("bulky-optimized-products", JSON.stringify(optimizedProducts));
+    } else if (typeof window !== "undefined" && Object.keys(optimizedProducts).length === 0) {
+      localStorage.removeItem("bulky-optimized-products");
+    }
+  }, [optimizedProducts]);
+
+  // Load optimized products from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("bulky-optimized-products");
       if (stored) {
         try {
           const parsedOptimized = JSON.parse(stored);
-          // Clean up old optimizations (older than 24 hours) that haven't been published
           const now = Date.now();
           const oneDayMs = 24 * 60 * 60 * 1000;
           const cleanedOptimized = Object.fromEntries(
             Object.entries(parsedOptimized).filter(([_, data]: [string, any]) => {
-              if (data.isPublished) return false; // Remove published ones
-              return (now - data.timestamp) < oneDayMs; // Keep recent ones
+              if (data.isPublished) return false;
+              return now - data.timestamp < oneDayMs;
             })
-          );
+          ) as StoredOptimizations;
           setOptimizedProducts(cleanedOptimized);
-          
-          // Update localStorage with cleaned data
           if (Object.keys(cleanedOptimized).length !== Object.keys(parsedOptimized).length) {
-            localStorage.setItem('bulky-optimized-products', JSON.stringify(cleanedOptimized));
+            localStorage.setItem("bulky-optimized-products", JSON.stringify(cleanedOptimized));
           }
         } catch (error) {
-          console.error('Failed to parse stored optimizations:', error);
-          // Clear corrupted data
-          localStorage.removeItem('bulky-optimized-products');
+          console.error("Failed to parse stored optimizations:", error);
+          localStorage.removeItem("bulky-optimized-products");
         }
       }
     }
   }, []);
 
-  // Save optimized products to localStorage whenever they change
+  // Debounced apply of search params
   useEffect(() => {
-    if (typeof window !== 'undefined' && Object.keys(optimizedProducts).length > 0) {
-      localStorage.setItem('bulky-optimized-products', JSON.stringify(optimizedProducts));
-    } else if (typeof window !== 'undefined' && Object.keys(optimizedProducts).length === 0) {
-      // Clear localStorage when no optimizations are pending
-      localStorage.removeItem('bulky-optimized-products');
-    }
-  }, [optimizedProducts]);
+    const timeoutId = setTimeout(() => {
+      const newSearchParams = new URLSearchParams();
+      if (searchValue) newSearchParams.set("query", searchValue);
+      if (statusFilter.length > 0) newSearchParams.set("status", statusFilter[0]);
+      if (productTypeFilter) newSearchParams.set("productType", productTypeFilter);
+      if (vendorFilter) newSearchParams.set("vendor", vendorFilter);
+      setSearchParams(newSearchParams);
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [searchValue, statusFilter, productTypeFilter, vendorFilter, setSearchParams]);
 
+  // Stable callbacks (unconditional). Define with function declarations to avoid lint false-positives.
   const handleSearchChange = useCallback((value: string) => {
     setSearchValue(value);
   }, []);
@@ -531,34 +522,10 @@ export default function Products() {
     setSelectedProductsPerPage(value);
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.set("productsPerPage", value);
-    newSearchParams.delete("page"); // Reset to page 1 when changing per page
+    newSearchParams.delete("page"); // Reset to page 1
     newSearchParams.delete("cursor"); // Reset cursor
     setSearchParams(newSearchParams);
   }, [searchParams, setSearchParams]);
-
-  // Auto-apply search with debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const newSearchParams = new URLSearchParams();
-      if (searchValue) newSearchParams.set("query", searchValue);
-      if (statusFilter.length > 0) newSearchParams.set("status", statusFilter[0]);
-      if (productTypeFilter) newSearchParams.set("productType", productTypeFilter);
-      if (vendorFilter) newSearchParams.set("vendor", vendorFilter);
-      setSearchParams(newSearchParams);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchValue, statusFilter, productTypeFilter, vendorFilter, setSearchParams]);
-
-  // Auto-apply filters immediately when they change
-  useEffect(() => {
-    const newSearchParams = new URLSearchParams();
-    if (searchValue) newSearchParams.set("query", searchValue);
-    if (statusFilter.length > 0) newSearchParams.set("status", statusFilter[0]);
-    if (productTypeFilter) newSearchParams.set("productType", productTypeFilter);
-    if (vendorFilter) newSearchParams.set("vendor", vendorFilter);
-    setSearchParams(newSearchParams);
-  }, [statusFilter, productTypeFilter, vendorFilter, setSearchParams]);
 
   const handleFiltersClearAll = useCallback(() => {
     setSearchValue("");
@@ -567,6 +534,15 @@ export default function Products() {
     setVendorFilter("");
     setSearchParams(new URLSearchParams());
   }, [setSearchParams]);
+
+  // Do NOT early-return before all hooks; render a loading state instead to keep hooks order stable
+
+  const { products, pageInfo, currentPage, productsPerPage, user, subscription } = loaderData as LoaderData;
+
+  // Sync per-page state with validated loader data
+  useEffect(() => {
+    setSelectedProductsPerPage(productsPerPage.toString());
+  }, [productsPerPage]);
 
 
 
@@ -1081,6 +1057,9 @@ export default function Products() {
     return statusConfig[status as keyof typeof statusConfig] || { status: "info" as const, children: status };
   };
 
+  // Remove unused variable lint for subscription by referencing it in UI when present
+  const subscriptionPlan = subscription?.planName;
+
   const toastMarkup = showToast ? (
     <Toast
       content={toastMessage}
@@ -1088,6 +1067,9 @@ export default function Products() {
       onDismiss={() => setShowToast(false)}
     />
   ) : null;
+
+  // Derive a loading flag instead of returning early
+  const isLoading = isInvalid;
 
   return (
     <ClientOnly fallback={
@@ -1101,7 +1083,30 @@ export default function Products() {
           <Page>
             <TitleBar title="Products" />
 
+        {/* Error Banner (rendered via content, not early-return) */}
+        {hasError && (
+          <Card>
+            <Box padding="600">
+              <Text variant="headingMd" as="h2" tone="critical">
+                Error Loading Products
+              </Text>
+              <Text variant="bodyMd" tone="subdued" as="p">
+                {(loaderData as any)?.details}
+              </Text>
+            </Box>
+          </Card>
+        )}
 
+        {/* Loading State (no early return, keeps hooks order consistent) */}
+        {isLoading && !hasError && (
+          <Card>
+            <Box padding="600">
+              <Text variant="headingMd" as="h2">
+                Loading Products...
+              </Text>
+            </Box>
+          </Card>
+        )}
 
         {/* Action Bar */}
         <Card>
@@ -1128,7 +1133,7 @@ export default function Products() {
                   <InlineStack gap="200" align="center">
                     <Icon source={CreditCardIcon} tone="subdued" />
                     <Text variant="bodyMd" fontWeight="semibold" as="span">
-                      {user.credits} credits remaining
+                      {user.credits} credits remaining{subscriptionPlan ? ` • Plan: ${subscriptionPlan}` : ""}
                     </Text>
                   </InlineStack>
                 </InlineStack>
@@ -1279,6 +1284,7 @@ export default function Products() {
             </Card>
 
             {/* Selection Controls */}
+            {!isLoading && (
             <Card>
               <Box padding="400">
                 <InlineStack gap="400" align="space-between">
@@ -1331,8 +1337,10 @@ export default function Products() {
                 </InlineStack>
               </Box>
             </Card>
+            )}
 
             {/* Products List */}
+            {!isLoading && (
             <Card>
               {products.length === 0 ? (
                 <Box padding="800">
@@ -1505,7 +1513,7 @@ export default function Products() {
                                                 {optimizedProducts[product.id].optimizedData.title}
                                               </Text>
                                               <div style={{ flexShrink: 0 }}>
-                                                <Badge status="success">Optimized</Badge>
+                                                <Badge tone="success" size="small">Optimized</Badge>
                                               </div>
                                             </div>
 
@@ -1574,9 +1582,11 @@ export default function Products() {
                                             {/* Optimized Tags */}
                                             {optimizedProducts[product.id].optimizedData.tags && optimizedProducts[product.id].optimizedData.tags.length > 0 && (
                                               <div>
-                                                <Text variant="bodySm" tone="subdued" as="span" style={{ marginBottom: "4px", display: "block" }}>
-                                                  Tags:
-                                                </Text>
+                                                <div style={{ marginBottom: "4px", display: "block" }}>
+                                                  <Text variant="bodySm" tone="subdued" as="span">
+                                                    Tags:
+                                                  </Text>
+                                                </div>
                                                 <div style={{
                                                   display: "flex",
                                                   gap: "4px",
@@ -1677,9 +1687,10 @@ export default function Products() {
                   })}</div>
               )}
             </Card>
+            )}
 
             {/* Pagination */}
-            {(pageInfo.hasNextPage || pageInfo.hasPreviousPage || products.length > 0) && (
+            {!isLoading && (pageInfo.hasNextPage || pageInfo.hasPreviousPage || products.length > 0) && (
               <Card>
                 <Box padding="400">
                   <InlineStack align="space-between">

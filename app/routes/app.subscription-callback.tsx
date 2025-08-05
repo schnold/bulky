@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { redirect } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
 import { syncUserPlanWithSubscription } from "../models/user.server";

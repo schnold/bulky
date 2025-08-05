@@ -645,6 +645,13 @@ export default function Pricing() {
   const IMPORTED_ENTERPRISE_PLAN = "enterprise_plan";
 
   const isLoading = navigation.state === "submitting";
+  // Provide user feedback if a click occurs but no redirect has happened yet
+  useEffect(() => {
+    if (navigation.state === "submitting") {
+      // Optional: could show a toast/spinner; using console for lightweight signal
+      console.log("[BILLING] Submitting subscription request…");
+    }
+  }, [navigation.state]);
 
   // Note: App Bridge redirect handling removed since we now use server-side redirects
   // This provides better embedded app context maintenance for managed pricing
@@ -710,19 +717,35 @@ export default function Pricing() {
       return;
     }
 
-    // Use fetch+transition to avoid DOM mutation during render cycle that can trigger React invariant errors
+    // Prefer Remix fetcher via form submit to ensure actionData is populated
     try {
-      const formData = new FormData();
-      formData.set("intent", "subscribe");
-      formData.set("plan", planName);
-      if (host) formData.set("host", host);
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = window.location.pathname + window.location.search;
+      form.style.display = "none";
 
-      // Submit via fetch to let Remix update actionData; redirect happens in useEffect
-      await fetch(window.location.pathname + window.location.search, {
-        method: "POST",
-        body: formData,
-        credentials: "same-origin",
-      });
+      const intentInput = document.createElement("input");
+      intentInput.type = "hidden";
+      intentInput.name = "intent";
+      intentInput.value = "subscribe";
+      form.appendChild(intentInput);
+
+      const planInput = document.createElement("input");
+      planInput.type = "hidden";
+      planInput.name = "plan";
+      planInput.value = planName;
+      form.appendChild(planInput);
+
+      if (host) {
+        const hostInput = document.createElement("input");
+        hostInput.type = "hidden";
+        hostInput.name = "host";
+        hostInput.value = host;
+        form.appendChild(hostInput);
+      }
+
+      document.body.appendChild(form);
+      form.submit();
     } catch (e) {
       console.error("[BILLING] Failed to submit subscribe action:", e);
     }

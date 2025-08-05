@@ -242,14 +242,8 @@ export async function createAppSubscription(
 
   const config = planConfig[planName];
 
-  // The host parameter is now passed in directly to preserve embedded context
-
-  // Use dedicated subscription callback route and include shop, host, and planKey
-  const callbackUrl = new URL("/app/subscription-callback", process.env.SHOPIFY_APP_URL || "http://localhost:3000");
-  callbackUrl.searchParams.set("shop", session.shop);
-  if (host) callbackUrl.searchParams.set("host", host);
-  callbackUrl.searchParams.set("planKey", config.planKey);
-  const returnUrl = callbackUrl.toString();
+  // Create return URL that goes to subscription callback route
+  const returnUrl = `${new URL(request.url).origin}/app/subscription-callback?shop=${session.shop}&planKey=${config.planKey}${host ? `&host=${host}` : ""}`;
 
   const mutation = `
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
@@ -341,7 +335,8 @@ export async function createAppSubscription(
     return {
       confirmationUrl: finalConfirmationUrl,
       appSubscription: result.appSubscription,
-      isManaged: false
+      isManaged: false,
+      planKey: config.planKey
     };
   } catch (error) {
     console.error(`[BILLING] Failed to create app subscription:`, {

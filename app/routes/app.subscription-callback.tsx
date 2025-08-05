@@ -1,31 +1,25 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
-import { ensureUserExists } from "../utils/db.server";
 import { syncUserPlanWithSubscription } from "../models/user.server";
 
-/**
- * Dedicated callback route after Shopify subscription confirmation.
- * - Rehydrates session via authenticate.admin(request)
- * - Reads shop, host, planKey from query
- * - Queries activeSubscriptions to confirm subscription
- * - Syncs local user plan with Shopify subscription
- * - Redirects to /app/pricing?upgraded=true&planKey=... (and propagates host/shop)
- */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { session, admin } = await authenticate.admin(request);
   const url = new URL(request.url);
-  const shop = url.searchParams.get("shop") || undefined;
-  const host = url.searchParams.get("host") || undefined;
-  const planKey = url.searchParams.get("planKey") || undefined;
+  
+  const shop = url.searchParams.get("shop") || session.shop;
+  const planKey = url.searchParams.get("planKey");
+  const host = url.searchParams.get("host");
+  
+  console.log(`[SUBSCRIPTION-CALLBACK] Processing callback:`, {
+    shop,
+    planKey,
+    host,
+    allParams: Object.fromEntries(url.searchParams.entries())
+  });
 
   try {
-    // Ensure we can authenticate admin for this request (rehydrates session)
-    const { session, admin } = await authenticate.admin(request);
-
-    // Ensure local user exists
-    await ensureUserExists(session.shop);
-
-    // Query Shopify for active subscriptions
+    // Query current active subscriptions to sync user plan
     const query = `
       query {
         currentAppInstallation {
@@ -39,50 +33,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
     `;
-
+    
     const response = await admin.graphql(query);
     const data = await response.json();
-
+    
+    console.log(`[SUBSCRIPTION-CALLBACK] Current subscriptions:`, JSON.stringify(data, null, 2));
+    
     const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
-
-    // Best-effort sync of local plan with Shopify subscription state
-    try {
-      await syncUserPlanWithSubscription(session.shop, subscriptions);
-    } catch (e) {
-      console.error("[SUBSCRIPTION-CALLBACK] Error syncing user plan:", e);
+    
+    // Sync user plan with subscription
+    if (subscriptions.length > 0) {
+      await syncUserPlanWithSubscription(shop, subscriptions);
+      console.log(`[SUBSCRIPTION-CALLBACK] User plan synced successfully`);
     }
-
-    // Build redirect back to pricing with success indicator
-    const redirectUrl = new URL("/app/pricing", process.env.SHOPIFY_APP_URL || "http://localhost:3000");
-    redirectUrl.searchParams.set("success", "true");
+    
+    // Redirect back to pricing page with success parameters
+    const redirectUrl = new URL("/app/pricing", new URL(request.url).origin);
+    redirectUrl.searchParams.set("shop", shop);
     redirectUrl.searchParams.set("upgraded", "true");
-    if (planKey) redirectUrl.searchParams.set("planKey", planKey);
-    redirectUrl.searchParams.set("shop", session.shop);
+    if (planKey) redirectUrl.searchParams.set("planId", planKey);
     if (host) redirectUrl.searchParams.set("host", host);
-
+    
+    console.log(`[SUBSCRIPTION-CALLBACK] Redirecting to:`, redirectUrl.toString());
+    
     return redirect(redirectUrl.toString());
   } catch (error) {
-    console.error("[SUBSCRIPTION-CALLBACK] Failed to process callback:", {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      shop,
-      host,
-      planKey,
-    });
-
-    // On failure, still send the user back to pricing but with an error flag
-    const redirectUrl = new URL("/app/pricing", process.env.SHOPIFY_APP_URL || "http://localhost:3000");
-    redirectUrl.searchParams.set("success", "false");
-    redirectUrl.searchParams.set("error", "subscription_callback_failed");
-    if (planKey) redirectUrl.searchParams.set("planKey", planKey);
-    if (shop) redirectUrl.searchParams.set("shop", shop);
+    console.error(`[SUBSCRIPTION-CALLBACK] Error processing callback:`, error);
+    
+    // Redirect to pricing page with error
+    const redirectUrl = new URL("/app/pricing", new URL(request.url).origin);
+    redirectUrl.searchParams.set("shop", shop);
+    redirectUrl.searchParams.set("error", "callback_failed");
     if (host) redirectUrl.searchParams.set("host", host);
-
+    
     return redirect(redirectUrl.toString());
   }
 };
-
-export default function SubscriptionCallback() {
-  // This route should never render as it immediately redirects in the loader.
-  return null;
-}

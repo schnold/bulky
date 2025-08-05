@@ -109,6 +109,8 @@ interface LoaderData {
     status: string;
   } | null;
   success: boolean;
+  upgradedPlanId?: string | null;
+  error?: string | null;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -118,7 +120,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   // Check for success parameter (user returning from Shopify confirmation)
   const url = new URL(request.url);
-  const success = url.searchParams.get("success") === "true";
+  const success = url.searchParams.get("upgraded") === "true";
+  const upgradedPlanId = url.searchParams.get("planId");
+  const error = url.searchParams.get("error");
   
   // Log return from billing for debugging
   if (success) {
@@ -186,6 +190,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     },
     currentSubscription,
     success,
+    upgradedPlanId,
+    error,
   });
 };
 
@@ -242,8 +248,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       
       // Return the URL to the client for iframe breakout redirect
       return json({ 
-        redirectUrl: result.confirmationUrl,
-        isManaged: result.isManaged 
+        confirmationUrl: result.confirmationUrl,
+        planId: result.planKey || planName
       });
     } catch (error) {
       console.error(`[BILLING] Billing request failed:`, {
@@ -276,6 +282,57 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         planName,
       });
       return json({ error: "Failed to update plan manually" }, { status: 400 });
+    }
+  }
+
+  if (intent === "syncSubscription") {
+    console.log(`[BILLING] Force-syncing subscription for ${session.shop}`);
+    
+    try {
+      const { admin } = await authenticate.admin(request);
+      
+      // Query current active subscriptions from Shopify
+      const query = `
+        query {
+          currentAppInstallation {
+            activeSubscriptions {
+              id
+              name
+              status
+              currentPeriodEnd
+              test
+            }
+          }
+        }
+      `;
+      
+      const response = await admin.graphql(query);
+      const data = await response.json();
+      
+      console.log(`[BILLING] Found subscriptions for sync:`, JSON.stringify(data, null, 2));
+      
+      const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
+      
+      for (const subscription of subscriptions) {
+        if (subscription.status === "ACTIVE") {
+          console.log(`✅ Found active subscription: ${subscription.name}`);
+          
+          // Sync user plan with actual subscription status
+          const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
+          if (syncResult?.updated) {
+            return json({ 
+              success: true, 
+              message: `Successfully synced to ${syncResult.planName} plan!`,
+              planId: syncResult.planName
+            });
+          }
+        }
+      }
+      
+      return json({ success: false, message: "No active paid subscriptions found" });
+    } catch (error) {
+      console.error(`[BILLING] Sync failed:`, error);
+      return json({ error: "Failed to sync subscription" }, { status: 400 });
     }
   }
 
@@ -557,7 +614,7 @@ function ErrorBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export default function Pricing() {
-  const { user, currentSubscription, success } = useLoaderData<typeof loader>();
+  const { user, currentSubscription, success, upgradedPlanId, error } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const [showToast, setShowToast] = useState(false);
@@ -571,73 +628,89 @@ export default function Pricing() {
 
   // Handle success parameter from URL and clean up problematic parameters
   useEffect(() => {
-    if (success) {
+    if (success && upgradedPlanId) {
       setShowSuccessToast(true);
       
-      // Clean up URL parameters that might cause issues after payment
-      try {
-        const currentUrl = new URL(window.location.href);
-        const hasCleanupParams = currentUrl.searchParams.has('success') || 
-                                currentUrl.searchParams.has('processed') || 
-                                currentUrl.searchParams.has('billing_redirect');
-        
-        if (hasCleanupParams) {
-          // Remove parameters that are no longer needed
-          currentUrl.searchParams.delete('processed');
-          currentUrl.searchParams.delete('billing_redirect');
-          // Keep success parameter for toast display
-          
+      // Clean up any pending upgrade tracking
+      localStorage.removeItem('pendingPlanUpgrade');
+      
+      // Clean up URL parameters after showing success
+      setTimeout(() => {
+        try {
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.delete('upgraded');
+          currentUrl.searchParams.delete('planId');
+          currentUrl.searchParams.delete('error');
           window.history.replaceState({}, '', currentUrl.toString());
+        } catch (error) {
+          console.warn('[BILLING] Error cleaning URL parameters:', error);
         }
-      } catch (error) {
-        console.warn('[BILLING] Error cleaning URL parameters:', error);
-      }
+      }, 5000); // Clean up after 5 seconds
     }
-  }, [success]);
+  }, [success, upgradedPlanId]);
 
-  // Handle billing API confirmation URL redirect (also needs iframe breakout)
+  // Fallback: Check for pending plan upgrade after payment (similar to working example)
   useEffect(() => {
-    // Only run on client side to avoid hydration issues
-    if (!isClient) return;
-
-    // Guard: ensure actionData shape before accessing properties
-    const hasRedirect =
-      !!actionData &&
-      typeof actionData === "object" &&
-      "redirectUrl" in (actionData as any) &&
-      typeof (actionData as any).redirectUrl === "string" &&
-      (actionData as any).redirectUrl.length > 0;
-
-    if (!hasRedirect) return;
-    if (navigation.state !== "idle") return;
-
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const hasProcessedRedirect = urlParams.get("processed") === "true";
-
-      if (!hasProcessedRedirect) {
-        console.log("[BILLING] Redirecting to billing confirmation URL:", (actionData as any).redirectUrl);
-
-        // Set processed flag immediately to prevent re-execution
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.set("processed", "true");
-        window.history.replaceState({}, "", cleanUrl.toString());
-
-        // Force full page navigation to break out of any problematic iframe context
-        // Use window.location to avoid cross-origin frame access errors when embedded
-        window.location.assign((actionData as any).redirectUrl as string);
-      }
-    } catch (error) {
-      console.error("[BILLING] Error in redirect handler:", error);
-      // Fallback: still try to redirect even if there's an error
-      try {
-        // Avoid cross-origin operation on window.top
-        window.location.href = (actionData as any).redirectUrl as string;
-      } catch {
-        // no-op
-      }
+    if (success || error) {
+      // Don't run fallback logic if we already have success/error status
+      return;
     }
-  }, [actionData, navigation.state, isClient]);
+
+    const checkPendingUpgrade = async () => {
+      const pending = localStorage.getItem('pendingPlanUpgrade');
+      if (pending) {
+        try {
+          const { planId, timestamp } = JSON.parse(pending);
+          const now = Date.now();
+          
+          // Only check if less than 5 minutes have passed
+          if (now - timestamp < 5 * 60 * 1000) {
+            console.log(`🔄 Checking for subscription update after payment for plan: ${planId}`);
+            
+            // Trigger a sync by reloading the page to check subscription status
+            window.location.reload();
+          } else {
+            // Clean up old pending upgrades
+            localStorage.removeItem('pendingPlanUpgrade');
+          }
+        } catch (error) {
+          console.error('Error checking pending upgrade:', error);
+          localStorage.removeItem('pendingPlanUpgrade');
+        }
+      }
+    };
+
+    // Check immediately on load
+    checkPendingUpgrade();
+
+    // Set up interval to check every 10 seconds for 2 minutes
+    const interval = setInterval(checkPendingUpgrade, 10000);
+    
+    // Clean up interval after 2 minutes
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      localStorage.removeItem('pendingPlanUpgrade');
+    }, 2 * 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [success, error]);
+
+  // Handle confirmation URL redirect using App Bridge (prevents shop URL prompts)
+  useEffect(() => {
+    if (actionData && 'confirmationUrl' in actionData && actionData.confirmationUrl) {
+      // Store the plan ID we're upgrading to for tracking
+      localStorage.setItem('pendingPlanUpgrade', JSON.stringify({
+        planId: actionData.planId || 'unknown',
+        timestamp: Date.now()
+      }));
+
+      // Use window.open with _top to break out of iframe properly
+      window.open(actionData.confirmationUrl, '_top');
+    }
+  }, [actionData]);
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
   // const app = useAppBridge();
 
@@ -787,7 +860,7 @@ export default function Pricing() {
 
   const successToastMarkup = showSuccessToast ? (
     <Toast
-      content="Subscription created successfully! Your plan is now active."
+      content={`Subscription successful! Your ${upgradedPlanId ? upgradedPlanId.replace('_', ' ') : ''} plan is now active.`}
       onDismiss={() => setShowSuccessToast(false)}
     />
   ) : null;
@@ -923,6 +996,25 @@ export default function Pricing() {
                           >
                             Set Free
                           </Button>
+                          <Button 
+                            size="micro" 
+                            onClick={() => {
+                              const form = document.createElement("form");
+                              form.method = "POST";
+                              form.style.display = "none";
+                              
+                              const intentInput = document.createElement("input");
+                              intentInput.type = "hidden";
+                              intentInput.name = "intent";
+                              intentInput.value = "syncSubscription";
+                              form.appendChild(intentInput);
+                              
+                              document.body.appendChild(form);
+                              form.submit();
+                            }}
+                          >
+                            🔄 Sync Now
+                          </Button>
                         </InlineStack>
                       </Box>
                     </Banner>
@@ -998,6 +1090,34 @@ export default function Pricing() {
               </Grid.Cell>
             </Grid>
           </Box>
+
+          {/* Success Message */}
+          {success && upgradedPlanId && (
+            <Box paddingBlockStart="800">
+              <Banner
+                title="🎉 Subscription Successful!"
+                tone="success"
+              >
+                <Text as="p">
+                  Your plan has been upgraded successfully! Your new plan is now active and credits have been added to your account.
+                </Text>
+              </Banner>
+            </Box>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <Box paddingBlockStart="800">
+              <Banner
+                title="Subscription Error"
+                tone="critical"
+              >
+                <Text as="p">
+                  There was an issue processing your subscription. Please try again or contact support if the problem persists.
+                </Text>
+              </Banner>
+            </Box>
+          )}
 
           {/* Current Subscription Status */}
           {currentSubscription && (

@@ -242,8 +242,8 @@ export async function createAppSubscription(
 
   const config = planConfig[planName];
 
-  // Create return URL that goes to subscription callback route
-  const returnUrl = `${new URL(request.url).origin}/app/subscription-callback?shop=${session.shop}&planKey=${config.planKey}${host ? `&host=${host}` : ""}`;
+  // Create return URL that goes back to pricing page with success parameters
+  const returnUrl = `${new URL(request.url).origin}/app/pricing?shop=${session.shop}&upgraded=true&planId=${config.planKey}`;
 
   const mutation = `
     mutation AppSubscriptionCreate($name: String!, $lineItems: [AppSubscriptionLineItemInput!]!, $returnUrl: URL!, $test: Boolean) {
@@ -335,8 +335,7 @@ export async function createAppSubscription(
     return {
       confirmationUrl: finalConfirmationUrl,
       appSubscription: result.appSubscription,
-      isManaged: false,
-      planKey: config.planKey
+      isManaged: false
     };
   } catch (error) {
     console.error(`[BILLING] Failed to create app subscription:`, {

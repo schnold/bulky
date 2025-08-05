@@ -52,15 +52,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       console.error("[SUBSCRIPTION-CALLBACK] Error syncing user plan:", e);
     }
 
-    // Build redirect back to pricing with success indicator
-    const redirectUrl = new URL("/app/pricing", process.env.SHOPIFY_APP_URL || "http://localhost:3000");
-    redirectUrl.searchParams.set("success", "true");
-    redirectUrl.searchParams.set("upgraded", "true");
-    if (planKey) redirectUrl.searchParams.set("planKey", planKey);
-    redirectUrl.searchParams.set("shop", session.shop);
-    if (host) redirectUrl.searchParams.set("host", host);
+    // Build redirect back to pricing with success indicator (top-level breakout)
+    const appBase = process.env.SHOPIFY_APP_URL || "http://localhost:3000";
+    const finalDestination = new URL("/app/pricing", appBase);
+    finalDestination.searchParams.set("success", "true");
+    finalDestination.searchParams.set("upgraded", "true");
+    if (planKey) finalDestination.searchParams.set("planKey", planKey);
+    finalDestination.searchParams.set("shop", session.shop);
+    if (host) finalDestination.searchParams.set("host", host);
 
-    return redirect(redirectUrl.toString());
+    // Route through top-level redirect to avoid embedding admin/shop pages in iframe
+    const topLevel = new URL("/app/top-level-redirect", appBase);
+    topLevel.searchParams.set("to", finalDestination.toString());
+
+    return redirect(topLevel.toString());
   } catch (error) {
     console.error("[SUBSCRIPTION-CALLBACK] Failed to process callback:", {
       error: error instanceof Error ? error.message : String(error),
@@ -70,15 +75,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       planKey,
     });
 
-    // On failure, still send the user back to pricing but with an error flag
-    const redirectUrl = new URL("/app/pricing", process.env.SHOPIFY_APP_URL || "http://localhost:3000");
-    redirectUrl.searchParams.set("success", "false");
-    redirectUrl.searchParams.set("error", "subscription_callback_failed");
-    if (planKey) redirectUrl.searchParams.set("planKey", planKey);
-    if (shop) redirectUrl.searchParams.set("shop", shop);
-    if (host) redirectUrl.searchParams.set("host", host);
+    // On failure, still send the user back to pricing but with an error flag (top-level breakout)
+    const appBase = process.env.SHOPIFY_APP_URL || "http://localhost:3000";
+    const finalDestination = new URL("/app/pricing", appBase);
+    finalDestination.searchParams.set("success", "false");
+    finalDestination.searchParams.set("error", "subscription_callback_failed");
+    if (planKey) finalDestination.searchParams.set("planKey", planKey);
+    if (shop) finalDestination.searchParams.set("shop", shop);
+    if (host) finalDestination.searchParams.set("host", host);
 
-    return redirect(redirectUrl.toString());
+    const topLevel = new URL("/app/top-level-redirect", appBase);
+    topLevel.searchParams.set("to", finalDestination.toString());
+
+    return redirect(topLevel.toString());
   }
 };
 

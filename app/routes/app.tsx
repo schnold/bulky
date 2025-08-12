@@ -10,7 +10,10 @@ import polarisTranslations from "@shopify/polaris/locales/en.json";
 
 import { authenticate } from "../shopify.server";
 
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+export const links = () => [
+  { rel: "preload", href: polarisStyles, as: "style" },
+  { rel: "stylesheet", href: polarisStyles },
+];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);

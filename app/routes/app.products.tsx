@@ -1130,12 +1130,34 @@ export default function Products() {
                   >
                     Special Instructions
                   </Button>
-                  <InlineStack gap="200" align="center">
-                    <Icon source={CreditCardIcon} tone="subdued" />
-                    <Text variant="bodyMd" fontWeight="semibold" as="span">
-                      {user.credits} credits remaining{subscriptionPlan ? ` • Plan: ${subscriptionPlan}` : ""}
-                    </Text>
-                  </InlineStack>
+                  
+                  {/* Enhanced Credits and Plan Display */}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "8px 12px",
+                    backgroundColor: "var(--p-color-bg-surface-secondary)",
+                    borderRadius: "8px",
+                    border: "1px solid var(--p-color-border)",
+                  }}>
+                    <Icon source={CreditCardIcon} tone="base" />
+                    <div style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-end",
+                      gap: "2px"
+                    }}>
+                      <Text variant="bodyMd" fontWeight="semibold" as="span">
+                        {user.credits} credits
+                      </Text>
+                      {subscriptionPlan && (
+                        <Text variant="bodySm" tone="subdued" as="span">
+                          {subscriptionPlan} Plan
+                        </Text>
+                      )}
+                    </div>
+                  </div>
                 </InlineStack>
                 <Text variant="bodySm" tone="subdued" as="p">
                   Select products using checkboxes to enable bulk optimization

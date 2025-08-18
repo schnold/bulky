@@ -142,6 +142,7 @@ export default function Index() {
   const loaderData = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResponse>();
   const userDataFetcher = useFetcher<{ user?: UserData; error?: string }>();
+  const accountDataFetcher = useFetcher<{ user?: Pick<UserData, 'plan' | 'credits' | 'shop' | 'createdAt'>; error?: string }>();
   const navigate = useNavigate();
 
   const [newKeyword, setNewKeyword] = useState("");
@@ -151,20 +152,28 @@ export default function Index() {
 
   const isLoading = ["loading", "submitting"].includes(fetcher.state);
   const isUserDataLoading = ["loading", "submitting"].includes(userDataFetcher.state);
+  const isAccountDataLoading = ["loading", "submitting"].includes(accountDataFetcher.state);
   
   // Get user data - either from the async fetch or null for loading state
   const user = userDataFetcher.data?.user;
   const userDataError = userDataFetcher.data?.error;
+  
+  // Get account data separately
+  const accountData = accountDataFetcher.data?.user;
+  const accountDataError = accountDataFetcher.data?.error;
 
   // Load user data on mount
   useEffect(() => {
     userDataFetcher.load("/api/user-data");
+    accountDataFetcher.load("/api/user-data");
   }, []);
 
   // Re-fetch user data after successful keyword operations
   useEffect(() => {
     if (fetcher.data && 'success' in fetcher.data && fetcher.data.success) {
       userDataFetcher.load("/api/user-data");
+      // Also refresh account data in case credits were updated
+      accountDataFetcher.load("/api/user-data");
     }
   }, [fetcher.data]);
 
@@ -421,9 +430,20 @@ export default function Index() {
           <Layout.Section variant="oneThird">
             <BlockStack gap="500">
               {/* Plan & Credits Card */}
-              {!user && isUserDataLoading ? (
+              {!accountData && isAccountDataLoading ? (
                 <AccountLoadingState />
-              ) : user ? (
+              ) : accountDataError ? (
+                <Card>
+                  <BlockStack gap="400">
+                    <Text as="h2" variant="headingMd">Account Overview</Text>
+                    <Box padding="400" background="bg-surface-critical-subdued" borderRadius="200">
+                      <Text as="p" variant="bodySm" tone="critical" alignment="center">
+                        Error loading account data: {accountDataError}
+                      </Text>
+                    </Box>
+                  </BlockStack>
+                </Card>
+              ) : accountData ? (
                 <Card>
                   <BlockStack gap="400">
                     <Text as="h2" variant="headingMd">
@@ -435,7 +455,7 @@ export default function Index() {
                         <Text as="span" variant="bodyMd">
                           Current Plan
                         </Text>
-                        <Badge {...getPlanBadge(user.plan)} />
+                        <Badge {...getPlanBadge(accountData.plan)} />
                       </InlineStack>
 
                       <InlineStack align="space-between">
@@ -443,7 +463,7 @@ export default function Index() {
                           Optimization Credits
                         </Text>
                         <Text as="span" variant="bodyMd" fontWeight="semibold">
-                          {user.credits}
+                          {accountData.credits}
                         </Text>
                       </InlineStack>
 
@@ -453,11 +473,11 @@ export default function Index() {
                           Credits Usage
                         </Text>
                         <ProgressBar
-                          progress={(user.credits / 100) * 100} // Assuming 100 is max for visual
+                          progress={(accountData.credits / 100) * 100} // Assuming 100 is max for visual
                           size="small"
                         />
                         <Text variant="bodySm" tone="subdued" as="p">
-                          {user.credits > 5 ? "Good" : user.credits > 0 ? "Low" : "Empty"}
+                          {accountData.credits > 5 ? "Good" : accountData.credits > 0 ? "Low" : "Empty"}
                         </Text>
                       </Box>
                     </BlockStack>
@@ -465,19 +485,19 @@ export default function Index() {
                     <Button
                       variant="primary"
                       fullWidth
-                      disabled={user.plan !== "free"}
+                      disabled={accountData.plan !== "free"}
                     onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
                     >
-                      {user.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
+                      {accountData.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
                     </Button>
                   </BlockStack>
                 </Card>
               ) : null}
 
               {/* Quick Stats */}
-              {!user && isUserDataLoading ? (
+              {(!user && isUserDataLoading) || (!accountData && isAccountDataLoading) ? (
                 <QuickStatsLoadingState />
-              ) : user ? (
+              ) : (user || accountData) ? (
                 <Card>
                   <BlockStack gap="200">
                     <Text as="h2" variant="headingMd">
@@ -489,7 +509,7 @@ export default function Index() {
                           Shop
                         </Text>
                         <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {user.shop}
+                          {accountData?.shop || user?.shop || loaderData.shop}
                         </Text>
                       </InlineStack>
                       <InlineStack align="space-between">
@@ -497,7 +517,7 @@ export default function Index() {
                           Keywords
                         </Text>
                         <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {user.keywords?.length || 0}
+                          {user?.keywords?.length || 0}
                         </Text>
                       </InlineStack>
                       <InlineStack align="space-between">
@@ -505,7 +525,8 @@ export default function Index() {
                           Member Since
                         </Text>
                         <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {new Date(user.createdAt).toLocaleDateString()}
+                          {accountData?.createdAt ? new Date(accountData.createdAt).toLocaleDateString() : 
+                           user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Loading...'}
                         </Text>
                       </InlineStack>
                     </BlockStack>

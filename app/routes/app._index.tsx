@@ -246,7 +246,7 @@ export default function Index() {
         <Box padding="300" background="bg-surface-secondary" borderRadius="200">
           <InlineStack align="center" gap="200">
             <Spinner size="small" />
-            <Text variant="bodySm" tone="subdued">Loading your keywords...</Text>
+            <Text as="span" variant="bodySm" tone="subdued">Loading your keywords...</Text>
           </InlineStack>
         </Box>
       </BlockStack>
@@ -336,7 +336,7 @@ export default function Index() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">SEO Keywords</Text>
-                  <Box padding="400" background="bg-surface-critical-subdued" borderRadius="200">
+                                     <Box padding="400" background="bg-surface-critical" borderRadius="200">
                     <Text as="p" variant="bodySm" tone="critical" alignment="center">
                       Error loading keywords: {userDataError}
                     </Text>
@@ -436,7 +436,7 @@ export default function Index() {
                 <Card>
                   <BlockStack gap="400">
                     <Text as="h2" variant="headingMd">Account Overview</Text>
-                    <Box padding="400" background="bg-surface-critical-subdued" borderRadius="200">
+                    <Box padding="400" background="bg-surface-critical" borderRadius="200">
                       <Text as="p" variant="bodySm" tone="critical" alignment="center">
                         Error loading account data: {accountDataError}
                       </Text>

@@ -7,6 +7,17 @@ import { useNavigate } from "@remix-run/react";
 type ActionResponse =
   | { success: true; message: string }
   | { error: string };
+
+type UserData = {
+  id: string;
+  shop: string;
+  plan: string;
+  credits: number;
+  keywords?: Array<{ id: string; keyword: string; }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 import { useFetcher, useLoaderData } from "@remix-run/react";
 import {
   Page,
@@ -21,6 +32,9 @@ import {
   TextField,
   Toast,
   ProgressBar,
+  Spinner,
+  SkeletonBodyText,
+  SkeletonDisplayText,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { DeleteIcon, PlusIcon } from "@shopify/polaris-icons";
@@ -28,63 +42,18 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-
-  const { admin, session } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   if (!session || !session.shop) {
     throw new Response("Unauthorized", { status: 401 });
   }
 
-  console.log(`🔍 LOADER - Session shop: ${session.shop}`);
-
-  // Get user data from database (user is guaranteed to exist from app.tsx loader)
-  const { ensureUserExists } = await import("../utils/db.server");
-  let user = await ensureUserExists(session.shop, true); // Include keywords
-
-  // Check current subscriptions and sync if needed
-  try {
-    const query = `
-      query {
-        currentAppInstallation {
-          activeSubscriptions {
-            id
-            name
-            status
-            currentPeriodEnd
-            test
-          }
-        }
-      }
-    `;
-    
-    const response = await admin.graphql(query);
-    const data = await response.json();
-    const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
-    
-    // Sync user plan with actual subscription status (fallback if webhook was missed)
-    const { syncUserPlanWithSubscription } = await import("../models/user.server");
-    const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
-    if (syncResult?.updated) {
-      console.log(`🔄 Dashboard: User plan synced successfully:`, syncResult);
-      // Get fresh user data after sync (don't mutate existing object)
-      user = await ensureUserExists(session.shop, true);
-    }
-  } catch (error) {
-    console.error('🔄 Dashboard: Error syncing user plan:', error);
-  }
-
-  console.log(`🔍 LOADER - User found:`, {
-    id: user.id,
-    shop: user.shop,
-    plan: user.plan,
-    credits: user.credits,
-    keywordsCount: user.keywords?.length || 0,
-    keywords: user.keywords?.map(k => k.keyword) || [],
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
+  // Return minimal data for immediate UI render
+  return json({ 
+    shop: session.shop,
+    // User data will be loaded async
+    user: null 
   });
-
-  return json({ user });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -170,8 +139,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const { user } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResponse>();
+  const userDataFetcher = useFetcher<{ user?: UserData; error?: string }>();
   const navigate = useNavigate();
 
   const [newKeyword, setNewKeyword] = useState("");
@@ -180,6 +150,23 @@ export default function Index() {
   const [toastError, setToastError] = useState(false);
 
   const isLoading = ["loading", "submitting"].includes(fetcher.state);
+  const isUserDataLoading = ["loading", "submitting"].includes(userDataFetcher.state);
+  
+  // Get user data - either from the async fetch or null for loading state
+  const user = userDataFetcher.data?.user;
+  const userDataError = userDataFetcher.data?.error;
+
+  // Load user data on mount
+  useEffect(() => {
+    userDataFetcher.load("/api/user-data");
+  }, []);
+
+  // Re-fetch user data after successful keyword operations
+  useEffect(() => {
+    if (fetcher.data && 'success' in fetcher.data && fetcher.data.success) {
+      userDataFetcher.load("/api/user-data");
+    }
+  }, [fetcher.data]);
 
   // Handle form responses
   useEffect(() => {
@@ -197,7 +184,7 @@ export default function Index() {
   }, [fetcher.data]);
 
   const handleAddKeyword = useCallback(() => {
-    if (newKeyword.trim() === "") return;
+    if (newKeyword.trim() === "" || !user) return;
 
     fetcher.submit(
       {
@@ -206,9 +193,11 @@ export default function Index() {
       },
       { method: "POST" }
     );
-  }, [newKeyword, fetcher]);
+  }, [newKeyword, fetcher, user]);
 
   const handleDeleteKeyword = useCallback((keywordId: string) => {
+    if (!user) return;
+    
     fetcher.submit(
       {
         intent: "deleteKeyword",
@@ -216,7 +205,7 @@ export default function Index() {
       },
       { method: "POST" }
     );
-  }, [fetcher]);
+  }, [fetcher, user]);
 
   const getPlanBadge = (plan: string) => {
     const planConfig = {
@@ -228,6 +217,76 @@ export default function Index() {
 
     return planConfig[plan as keyof typeof planConfig] || { status: "info" as const, children: plan };
   };
+
+  // Loading component for keywords section
+  const KeywordsLoadingState = () => (
+    <Card>
+      <BlockStack gap="400">
+        <SkeletonDisplayText size="medium" />
+        <SkeletonBodyText lines={2} />
+        <InlineStack gap="200">
+          <div style={{ flex: 1 }}>
+            <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+              <SkeletonBodyText lines={1} />
+            </Box>
+          </div>
+          <Box padding="300" background="bg-surface-secondary" borderRadius="200" minWidth="80px">
+            <SkeletonBodyText lines={1} />
+          </Box>
+        </InlineStack>
+        <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+          <InlineStack align="center" gap="200">
+            <Spinner size="small" />
+            <Text variant="bodySm" tone="subdued">Loading your keywords...</Text>
+          </InlineStack>
+        </Box>
+      </BlockStack>
+    </Card>
+  );
+
+  // Loading component for account overview
+  const AccountLoadingState = () => (
+    <Card>
+      <BlockStack gap="400">
+        <SkeletonDisplayText size="medium" />
+        <BlockStack gap="300">
+          <InlineStack align="space-between">
+            <SkeletonBodyText lines={1} />
+            <Box padding="100" background="bg-surface-secondary" borderRadius="100" minWidth="80px">
+              <SkeletonBodyText lines={1} />
+            </Box>
+          </InlineStack>
+          <InlineStack align="space-between">
+            <SkeletonBodyText lines={1} />
+            <SkeletonBodyText lines={1} />
+          </InlineStack>
+          <Box>
+            <SkeletonBodyText lines={3} />
+          </Box>
+        </BlockStack>
+        <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+          <SkeletonBodyText lines={1} />
+        </Box>
+      </BlockStack>
+    </Card>
+  );
+
+  // Loading component for quick stats
+  const QuickStatsLoadingState = () => (
+    <Card>
+      <BlockStack gap="200">
+        <SkeletonDisplayText size="medium" />
+        <BlockStack gap="200">
+          {[1, 2, 3].map(i => (
+            <InlineStack key={i} align="space-between">
+              <SkeletonBodyText lines={1} />
+              <SkeletonBodyText lines={1} />
+            </InlineStack>
+          ))}
+        </BlockStack>
+      </BlockStack>
+    </Card>
+  );
 
   const toastMarkup = showToast ? (
     <Toast
@@ -262,174 +321,197 @@ export default function Index() {
             </Card>
 
             {/* Keywords Management Card */}
-            <Card>
-              <BlockStack gap="400">
-                <InlineStack align="space-between" blockAlign="center">
-                  <Text as="h2" variant="headingMd">
-                    SEO Keywords
-                  </Text>
-                  {(!user.keywords || user.keywords.length < 3) && (
-                    <Badge tone="attention">
-                      Add 3+ keywords for better results
-                    </Badge>
-                  )}
-                </InlineStack>
-
-                <Text variant="bodySm" tone="subdued" as="p">
-                  Manage your target keywords for product optimization. More keywords = better AI optimization results.
-                </Text>
-
-                {/* Add Keyword Input */}
-                <InlineStack gap="200">
-                  <div style={{ flex: 1 }}>
-                    <TextField
-                      label="New Keyword"
-                      labelHidden
-                      value={newKeyword}
-                      onChange={setNewKeyword}
-                      placeholder="e.g., running shoes"
-                      autoComplete="off"
-                    />
-                  </div>
-                  <Button
-                    onClick={handleAddKeyword}
-                    disabled={isLoading || newKeyword.trim() === ""}
-                    icon={PlusIcon}
-                    loading={isLoading}
-                  >
-                    Add
-                  </Button>
-                </InlineStack>
-
-                {/* Keywords List */}
-                {user.keywords && user.keywords.length > 0 ? (
-                  <BlockStack gap="200">
-                    <Text as="p" variant="bodyMd" fontWeight="semibold">
-                      Your Keywords ({user.keywords.length})
+            {!user && isUserDataLoading ? (
+              <KeywordsLoadingState />
+            ) : userDataError ? (
+              <Card>
+                <BlockStack gap="400">
+                  <Text as="h2" variant="headingMd">SEO Keywords</Text>
+                  <Box padding="400" background="bg-surface-critical-subdued" borderRadius="200">
+                    <Text as="p" variant="bodySm" tone="critical" alignment="center">
+                      Error loading keywords: {userDataError}
                     </Text>
+                  </Box>
+                </BlockStack>
+              </Card>
+            ) : user ? (
+              <Card>
+                <BlockStack gap="400">
+                  <InlineStack align="space-between" blockAlign="center">
+                    <Text as="h2" variant="headingMd">
+                      SEO Keywords
+                    </Text>
+                    {(!user.keywords || user.keywords.length < 3) && (
+                      <Badge tone="attention">
+                        Add 3+ keywords for better results
+                      </Badge>
+                    )}
+                  </InlineStack>
+
+                  <Text variant="bodySm" tone="subdued" as="p">
+                    Manage your target keywords for product optimization. More keywords = better AI optimization results.
+                  </Text>
+
+                  {/* Add Keyword Input */}
+                  <InlineStack gap="200">
+                    <div style={{ flex: 1 }}>
+                      <TextField
+                        label="New Keyword"
+                        labelHidden
+                        value={newKeyword}
+                        onChange={setNewKeyword}
+                        placeholder="e.g., running shoes"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleAddKeyword}
+                      disabled={isLoading || newKeyword.trim() === ""}
+                      icon={PlusIcon}
+                      loading={isLoading}
+                    >
+                      Add
+                    </Button>
+                  </InlineStack>
+
+                  {/* Keywords List */}
+                  {user.keywords && user.keywords.length > 0 ? (
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        Your Keywords ({user.keywords.length})
+                      </Text>
+                      <Box
+                        padding="300"
+                        background="bg-surface-secondary"
+                        borderRadius="200"
+                      >
+                        <BlockStack gap="200">
+                          {user.keywords.map((keyword) => (
+                            <InlineStack key={keyword.id} align="space-between">
+                              <Text as="span" variant="bodySm">{keyword.keyword}</Text>
+                              <Button
+                                size="slim"
+                                variant="tertiary"
+                                icon={DeleteIcon}
+                                onClick={() => handleDeleteKeyword(keyword.id)}
+                                disabled={isLoading}
+                                tone="critical"
+                              />
+                            </InlineStack>
+                          ))}
+                        </BlockStack>
+                      </Box>
+                    </BlockStack>
+                  ) : (
                     <Box
-                      padding="300"
+                      padding="400"
                       background="bg-surface-secondary"
                       borderRadius="200"
                     >
-                      <BlockStack gap="200">
-                        {user.keywords.map((keyword) => (
-                          <InlineStack key={keyword.id} align="space-between">
-                            <Text as="span" variant="bodySm">{keyword.keyword}</Text>
-                            <Button
-                              size="slim"
-                              variant="tertiary"
-                              icon={DeleteIcon}
-                              onClick={() => handleDeleteKeyword(keyword.id)}
-                              disabled={isLoading}
-                              tone="critical"
-                            />
-                          </InlineStack>
-                        ))}
-                      </BlockStack>
+                      <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                        No keywords added yet. Add your first keyword to get started!
+                      </Text>
                     </Box>
-                  </BlockStack>
-                ) : (
-                  <Box
-                    padding="400"
-                    background="bg-surface-secondary"
-                    borderRadius="200"
-                  >
-                    <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                      No keywords added yet. Add your first keyword to get started!
-                    </Text>
-                  </Box>
-                )}
-              </BlockStack>
-            </Card>
+                  )}
+                </BlockStack>
+              </Card>
+            ) : null}
           </Layout.Section>
 
           <Layout.Section variant="oneThird">
             <BlockStack gap="500">
               {/* Plan & Credits Card */}
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">
-                    Account Overview
-                  </Text>
+              {!user && isUserDataLoading ? (
+                <AccountLoadingState />
+              ) : user ? (
+                <Card>
+                  <BlockStack gap="400">
+                    <Text as="h2" variant="headingMd">
+                      Account Overview
+                    </Text>
 
-                  <BlockStack gap="300">
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Current Plan
-                      </Text>
-                      <Badge {...getPlanBadge(user.plan)} />
-                    </InlineStack>
+                    <BlockStack gap="300">
+                      <InlineStack align="space-between">
+                        <Text as="span" variant="bodyMd">
+                          Current Plan
+                        </Text>
+                        <Badge {...getPlanBadge(user.plan)} />
+                      </InlineStack>
 
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Optimization Credits
-                      </Text>
-                      <Text as="span" variant="bodyMd" fontWeight="semibold">
-                        {user.credits}
-                      </Text>
-                    </InlineStack>
+                      <InlineStack align="space-between">
+                        <Text as="span" variant="bodyMd">
+                          Optimization Credits
+                        </Text>
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">
+                          {user.credits}
+                        </Text>
+                      </InlineStack>
 
-                    {/* Credits Progress Bar */}
-                    <Box>
-                      <Text variant="bodySm" tone="subdued" as="p">
-                        Credits Usage
-                      </Text>
-                      <ProgressBar
-                        progress={(user.credits / 100) * 100} // Assuming 100 is max for visual
-                        size="small"
-                      />
-                      <Text variant="bodySm" tone="subdued" as="p">
-                        {user.credits > 5 ? "Good" : user.credits > 0 ? "Low" : "Empty"}
-                      </Text>
-                    </Box>
+                      {/* Credits Progress Bar */}
+                      <Box>
+                        <Text variant="bodySm" tone="subdued" as="p">
+                          Credits Usage
+                        </Text>
+                        <ProgressBar
+                          progress={(user.credits / 100) * 100} // Assuming 100 is max for visual
+                          size="small"
+                        />
+                        <Text variant="bodySm" tone="subdued" as="p">
+                          {user.credits > 5 ? "Good" : user.credits > 0 ? "Low" : "Empty"}
+                        </Text>
+                      </Box>
+                    </BlockStack>
+
+                    <Button
+                      variant="primary"
+                      fullWidth
+                      disabled={user.plan !== "free"}
+                    onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
+                    >
+                      {user.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
+                    </Button>
                   </BlockStack>
-
-                  <Button
-                    variant="primary"
-                    fullWidth
-                    disabled={user.plan !== "free"}
-                  onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
-                  >
-                    {user.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
-                  </Button>
-                </BlockStack>
-              </Card>
+                </Card>
+              ) : null}
 
               {/* Quick Stats */}
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Quick Stats
-                  </Text>
+              {!user && isUserDataLoading ? (
+                <QuickStatsLoadingState />
+              ) : user ? (
+                <Card>
                   <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodySm">
-                        Shop
-                      </Text>
-                      <Text as="span" variant="bodySm" fontWeight="semibold">
-                        {user.shop}
-                      </Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodySm">
-                        Keywords
-                      </Text>
-                      <Text as="span" variant="bodySm" fontWeight="semibold">
-                        {user.keywords?.length || 0}
-                      </Text>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodySm">
-                        Member Since
-                      </Text>
-                      <Text as="span" variant="bodySm" fontWeight="semibold">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </Text>
-                    </InlineStack>
+                    <Text as="h2" variant="headingMd">
+                      Quick Stats
+                    </Text>
+                    <BlockStack gap="200">
+                      <InlineStack align="space-between">
+                        <Text as="span" variant="bodySm">
+                          Shop
+                        </Text>
+                        <Text as="span" variant="bodySm" fontWeight="semibold">
+                          {user.shop}
+                        </Text>
+                      </InlineStack>
+                      <InlineStack align="space-between">
+                        <Text as="span" variant="bodySm">
+                          Keywords
+                        </Text>
+                        <Text as="span" variant="bodySm" fontWeight="semibold">
+                          {user.keywords?.length || 0}
+                        </Text>
+                      </InlineStack>
+                      <InlineStack align="space-between">
+                        <Text as="span" variant="bodySm">
+                          Member Since
+                        </Text>
+                        <Text as="span" variant="bodySm" fontWeight="semibold">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </Text>
+                      </InlineStack>
+                    </BlockStack>
                   </BlockStack>
-                </BlockStack>
-              </Card>
+                </Card>
+              ) : null}
             </BlockStack>
           </Layout.Section>
         </Layout>

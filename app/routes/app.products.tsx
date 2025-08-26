@@ -496,7 +496,7 @@ export default function Products() {
       if (statusFilter.length > 0) newSearchParams.set("status", statusFilter[0]);
       if (productTypeFilter) newSearchParams.set("productType", productTypeFilter);
       if (vendorFilter) newSearchParams.set("vendor", vendorFilter);
-      setSearchParams(newSearchParams);
+      setSearchParams(newSearchParams, { replace: true, preventScrollReset: true });
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [searchValue, statusFilter, productTypeFilter, vendorFilter, setSearchParams]);
@@ -524,7 +524,7 @@ export default function Products() {
     newSearchParams.set("productsPerPage", value);
     newSearchParams.delete("page"); // Reset to page 1
     newSearchParams.delete("cursor"); // Reset cursor
-    setSearchParams(newSearchParams);
+    setSearchParams(newSearchParams, { replace: true, preventScrollReset: true });
   }, [searchParams, setSearchParams]);
 
   const handleFiltersClearAll = useCallback(() => {
@@ -532,7 +532,7 @@ export default function Products() {
     setStatusFilter([]);
     setProductTypeFilter("");
     setVendorFilter("");
-    setSearchParams(new URLSearchParams());
+    setSearchParams(new URLSearchParams(), { replace: true, preventScrollReset: true });
   }, [setSearchParams]);
 
   // Do NOT early-return before all hooks; render a loading state instead to keep hooks order stable
@@ -1033,7 +1033,7 @@ export default function Products() {
       // Use the start cursor from pageInfo for proper pagination
       newSearchParams.set("cursor", pageInfo.startCursor || "");
     }
-    setSearchParams(newSearchParams);
+    setSearchParams(newSearchParams, { preventScrollReset: true });
   };
 
   const handleNext = () => {
@@ -1044,7 +1044,7 @@ export default function Products() {
       // Use the end cursor from pageInfo for proper pagination
       newSearchParams.set("cursor", pageInfo.endCursor || "");
     }
-    setSearchParams(newSearchParams);
+    setSearchParams(newSearchParams, { preventScrollReset: true });
   };
 
   const getStatusBadge = (status: string) => {

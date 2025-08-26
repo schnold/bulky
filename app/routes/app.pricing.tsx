@@ -836,111 +836,6 @@ export default function Pricing() {
                   <strong>✅ Cancel anytime through Shopify</strong>
                 </Text>
 
-                {process.env.NODE_ENV === "development" && (
-                  <Box paddingBlockStart="200">
-                    <Banner tone="warning">
-                      <Text as="p" variant="bodySm">
-                        Debug Info: User Plan = "{user.plan}", Subscription = {currentSubscription ? `"${currentSubscription.planName}"` : "none"}
-                      </Text>
-                      {actionData && 'message' in actionData && actionData.message && (
-                        <Text as="p" variant="bodySm" fontWeight="semibold">
-                          Last Result: {String(actionData.message)}
-                        </Text>
-                      )}
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        ✅ Now using API-based billing (appSubscriptionCreate) - no more shop URL prompts!
-                      </Text>
-                      <Text as="p" variant="bodySm" tone="subdued">
-                        🔧 Fixed webhook to handle both 'id' and 'admin_graphql_api_id' fields
-                      </Text>
-                      <Box paddingBlockStart="300">
-                        <Text as="p" variant="bodySm" fontWeight="semibold">
-                          Manual Plan Update (Development Only):
-                        </Text>
-                        <Text as="p" variant="bodySm" tone="subdued">
-                          ℹ️ Credits are now ADDED to balance, not SET (except free plan)
-                        </Text>
-                        <InlineStack gap="200" blockAlign="center">
-                          <Button 
-                            size="micro" 
-                            onClick={() => {
-                              const form = document.createElement("form");
-                              form.method = "POST";
-                              form.style.display = "none";
-                              
-                              const intentInput = document.createElement("input");
-                              intentInput.type = "hidden";
-                              intentInput.name = "intent";
-                              intentInput.value = "manualUpdate";
-                              form.appendChild(intentInput);
-                              
-                              const planInput = document.createElement("input");
-                              planInput.type = "hidden";
-                              planInput.name = "planName";
-                              planInput.value = "starter_plan";
-                              form.appendChild(planInput);
-                              
-                              document.body.appendChild(form);
-                              form.submit();
-                            }}
-                          >
-                            Set Starter
-                          </Button>
-                          <Button 
-                            size="micro" 
-                            onClick={() => {
-                              const form = document.createElement("form");
-                              form.method = "POST";
-                              form.style.display = "none";
-                              
-                              const intentInput = document.createElement("input");
-                              intentInput.type = "hidden";
-                              intentInput.name = "intent";
-                              intentInput.value = "manualUpdate";
-                              form.appendChild(intentInput);
-                              
-                              const planInput = document.createElement("input");
-                              planInput.type = "hidden";
-                              planInput.name = "planName";
-                              planInput.value = "pro_plan";
-                              form.appendChild(planInput);
-                              
-                              document.body.appendChild(form);
-                              form.submit();
-                            }}
-                          >
-                            Set Pro
-                          </Button>
-                          <Button 
-                            size="micro" 
-                            onClick={() => {
-                              const form = document.createElement("form");
-                              form.method = "POST";
-                              form.style.display = "none";
-                              
-                              const intentInput = document.createElement("input");
-                              intentInput.type = "hidden";
-                              intentInput.name = "intent";
-                              intentInput.value = "manualUpdate";
-                              form.appendChild(intentInput);
-                              
-                              const planInput = document.createElement("input");
-                              planInput.type = "hidden";
-                              planInput.name = "planName";
-                              planInput.value = "free";
-                              form.appendChild(planInput);
-                              
-                              document.body.appendChild(form);
-                              form.submit();
-                            }}
-                          >
-                            Set Free
-                          </Button>
-                        </InlineStack>
-                      </Box>
-                    </Banner>
-                  </Box>
-                )}
               </BlockStack>
             </Box>
           </div>
@@ -1025,11 +920,6 @@ export default function Pricing() {
               >
                 <Text as="p">
                   You have <strong>{user.credits} optimization credits</strong> remaining this month. Your subscription renews automatically through Shopify.
-                  {process.env.NODE_ENV === "development" && (
-                    <Text as="span" variant="bodySm" tone="subdued">
-                      <br />💡 Dev note: Plan changes ADD credits to your balance (except switching to free)
-                    </Text>
-                  )}
                 </Text>
               </Banner>
             </Box>

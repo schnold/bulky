@@ -40,6 +40,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { DeleteIcon, PlusIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { SessionTokenTester } from "../components/SessionTokenTester";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -344,6 +345,8 @@ export default function Index() {
                 </BlockStack>
               </Card>
             ) : user ? (
+              <>
+              <SessionTokenTester />
               <Card>
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
@@ -424,6 +427,7 @@ export default function Index() {
                   )}
                 </BlockStack>
               </Card>
+              </>
             ) : null}
           </Layout.Section>
 

@@ -1078,6 +1078,14 @@ export default function Products() {
         <div>Loading...</div>
       </Page>
     }>
+      <style>
+        {`
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}
+      </style>
       <ErrorBoundary>
         <Frame>
           <Page>
@@ -1387,10 +1395,11 @@ export default function Products() {
                             display: "flex",
                             alignItems: "flex-start",
                             justifyContent: "space-between",
-                            minHeight: "80px",
+                            minHeight: "120px",
                             gap: "16px",
                             width: "100%",
-                            position: "relative"
+                            position: "relative",
+                            scrollBehavior: "smooth"
                           }}>
                             {/* Left Section: Checkbox + Image + Content */}
                             <div style={{
@@ -1500,7 +1509,8 @@ export default function Products() {
                                     padding: "12px",
                                     backgroundColor: "var(--p-color-bg-success-subdued)",
                                     borderRadius: "8px",
-                                    border: "1px solid var(--p-color-border-success)"
+                                    border: "1px solid var(--p-color-border-success)",
+                                    transition: "all 0.2s ease-in-out"
                                   }}>
                                     <BlockStack gap="300">
                                       <InlineStack gap="200" align="space-between">
@@ -1521,7 +1531,8 @@ export default function Products() {
                                           backgroundColor: "var(--p-color-bg-surface)",
                                           padding: "12px",
                                           borderRadius: "6px",
-                                          border: "1px solid var(--p-color-border)"
+                                          border: "1px solid var(--p-color-border)",
+                                          animation: "fadeIn 0.2s ease-in-out"
                                         }}>
                                           <BlockStack gap="200">
                                             {/* Optimized Title and Status Row */}

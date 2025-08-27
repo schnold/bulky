@@ -1,6 +1,6 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useRouteError, useSearchParams, useNavigate } from "@remix-run/react";
+import { Link, Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider, Frame } from "@shopify/polaris";
@@ -33,7 +33,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const host = searchParams.get("host");
 
   // Initialize session token authentication
@@ -52,36 +51,6 @@ export default function App() {
     }
   }, [apiKey, host]);
 
-  // Robust navigation handler for embedded apps
-  const handleNavClick = useCallback((path: string, label: string) => {
-    console.log(`[NAV] Clicking ${label}:`, { path, host, searchParams: Object.fromEntries(searchParams) });
-    
-    // Check for potential issues
-    if (!path) {
-      console.error(`[NAV] Empty path for ${label}`);
-      return false;
-    }
-    
-    try {
-      // Use programmatic navigation as fallback for embedded apps
-      console.log(`[NAV] Attempting navigation to: ${path}`);
-      
-      // Add small delay to prevent double-clicks
-      setTimeout(() => {
-        navigate(path, { replace: false });
-      }, 10);
-      
-    } catch (error) {
-      console.error(`[NAV] Navigation failed for ${label}:`, error);
-      // Fallback to window location
-      try {
-        window.location.href = path;
-      } catch (fallbackError) {
-        console.error(`[NAV] Fallback navigation also failed:`, fallbackError);
-      }
-    }
-  }, [navigate, host, searchParams]);
-
   // Create navigation paths with host parameter
   const getNavPath = useCallback((basePath: string) => {
     return `${basePath}${host ? `?host=${host}` : ''}`;
@@ -95,37 +64,21 @@ export default function App() {
             <Link 
               to={getNavPath('/app')} 
               rel="home"
-              onClick={(e) => {
-                e.preventDefault();
-                handleNavClick(getNavPath('/app'), 'Home');
-              }}
             >
               Home
             </Link>
             <Link 
               to={getNavPath('/app/products')}
-              onClick={(e) => {
-                e.preventDefault();
-                handleNavClick(getNavPath('/app/products'), 'SEO Optimization');
-              }}
             >
               SEO Optimization
             </Link>
             <Link 
               to={getNavPath('/app/pricing')}
-              onClick={(e) => {
-                e.preventDefault();
-                handleNavClick(getNavPath('/app/pricing'), 'Pricing');
-              }}
             >
               Pricing
             </Link>
             <Link 
               to={getNavPath('/app/help')}
-              onClick={(e) => {
-                e.preventDefault();
-                handleNavClick(getNavPath('/app/help'), 'Help & Support');
-              }}
             >
               Help & Support
             </Link>

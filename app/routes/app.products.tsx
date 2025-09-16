@@ -428,6 +428,7 @@ export default function Products() {
   const [optimizedProducts, setOptimizedProducts] = useState<StoredOptimizations>({});
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
+  const [urlUpdateSettings, setUrlUpdateSettings] = useState<{ [productId: string]: boolean }>({});
 
   // Derive flags AFTER hooks are declared (no conditional hook calls)
   const hasError = loaderData && typeof loaderData === "object" && "error" in loaderData;
@@ -637,18 +638,24 @@ export default function Products() {
     const optimizedData = optimizedProducts[productId];
     if (!optimizedData) return;
 
+    // Create a copy of optimized data and conditionally remove handle if URL update is disabled
+    const dataToPublish = { ...optimizedData.optimizedData };
+    if (!urlUpdateSettings[productId]) {
+      delete dataToPublish.handle;
+    }
+
     publishFetcher.submit(
       {
         intent: "publish",
         productId,
-        optimizedData: JSON.stringify(optimizedData.optimizedData),
+        optimizedData: JSON.stringify(dataToPublish),
       },
       {
         method: "POST",
         action: "/api/publish"
       }
     );
-  }, [optimizedProducts, publishFetcher]);
+  }, [optimizedProducts, publishFetcher, urlUpdateSettings]);
 
   // Handle denying/discarding optimized data
   const handleDenyProduct = useCallback((productId: string) => {
@@ -1562,15 +1569,26 @@ export default function Products() {
                                               </Text>
                                             </div>
 
-                                            {/* Optimized Handle */}
+                                            {/* Optimized Handle with checkbox */}
                                             <div style={{
                                               display: "flex",
                                               alignItems: "center",
-                                              gap: "8px"
+                                              gap: "8px",
+                                              justifyContent: "space-between"
                                             }}>
                                               <Text variant="bodySm" tone="subdued" as="span">
                                                 URL: /{optimizedProducts[product.id].optimizedData.handle}
                                               </Text>
+                                              <Checkbox
+                                                label="Update URL"
+                                                checked={urlUpdateSettings[product.id] ?? true}
+                                                onChange={(checked) => {
+                                                  setUrlUpdateSettings(prev => ({
+                                                    ...prev,
+                                                    [product.id]: checked
+                                                  }));
+                                                }}
+                                              />
                                             </div>
 
                                             {/* Optimized Description Dropdown */}

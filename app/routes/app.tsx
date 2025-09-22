@@ -1,10 +1,10 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-run/react";
+import { Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider, Frame } from "@shopify/polaris";
-import { NavMenu } from "@shopify/app-bridge-react";
+import { NavMenu, useNavigate } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import polarisTranslations from "@shopify/polaris/locales/en.json";
 import { useCallback, useEffect } from "react";
@@ -34,6 +34,7 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const host = searchParams.get("host");
+  const navigate = useNavigate();
 
   // Initialize session token authentication
   useEffect(() => {
@@ -56,32 +57,39 @@ export default function App() {
     return `${basePath}${host ? `?host=${host}` : ''}`;
   }, [host]);
 
+  const handleNavigation = useCallback((path: string) => {
+    navigate(getNavPath(path));
+  }, [navigate, getNavPath]);
+
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <PolarisAppProvider i18n={polarisTranslations}>
         <Frame>
           <NavMenu>
-            <Link 
-              to={getNavPath('/app')} 
-              rel="home"
+            <button 
+              onClick={() => handleNavigation('/app')}
+              style={{ all: 'unset', cursor: 'pointer' }}
             >
               Home
-            </Link>
-            <Link 
-              to={getNavPath('/app/products')}
+            </button>
+            <button 
+              onClick={() => handleNavigation('/app/products')}
+              style={{ all: 'unset', cursor: 'pointer' }}
             >
               SEO Optimization
-            </Link>
-            <Link 
-              to={getNavPath('/app/pricing')}
+            </button>
+            <button 
+              onClick={() => handleNavigation('/app/pricing')}
+              style={{ all: 'unset', cursor: 'pointer' }}
             >
               Pricing
-            </Link>
-            <Link 
-              to={getNavPath('/app/help')}
+            </button>
+            <button 
+              onClick={() => handleNavigation('/app/help')}
+              style={{ all: 'unset', cursor: 'pointer' }}
             >
               Help & Support
-            </Link>
+            </button>
           </NavMenu>
           <Outlet />
         </Frame>

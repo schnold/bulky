@@ -4,9 +4,9 @@ import { Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-ru
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider, Frame } from "@shopify/polaris";
-import { NavMenu, useNavigate } from "@shopify/app-bridge-react";
+import { NavMenu, useAppBridge } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
-import polarisTranslations from "@shopify/polaris/locales/en.json";
+import polarisTranslations from "@shopify/polaris/locales/en.json" with { type: "json" };
 import { useCallback, useEffect } from "react";
 
 import { initializeSessionTokenAuth } from "../utils/session-token";
@@ -34,7 +34,7 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const host = searchParams.get("host");
-  const navigate = useNavigate();
+  const shopify = useAppBridge();
 
   // Initialize session token authentication
   useEffect(() => {
@@ -58,8 +58,15 @@ export default function App() {
   }, [host]);
 
   const handleNavigation = useCallback((path: string) => {
-    navigate(getNavPath(path));
-  }, [navigate, getNavPath]);
+    const fullPath = getNavPath(path);
+    // Use App Bridge navigation
+    if (shopify?.navigation) {
+      shopify.navigation.navigate(fullPath);
+    } else {
+      // Fallback to window navigation if App Bridge is not available
+      window.location.href = fullPath;
+    }
+  }, [shopify, getNavPath]);
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>

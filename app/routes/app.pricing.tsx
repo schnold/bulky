@@ -745,8 +745,35 @@ export default function Pricing() {
     const urlParams = new URLSearchParams(window.location.search);
     const host = urlParams.get("host");
 
-    // Skip form submission for free plan since it doesn't require billing
+    // Handle free plan selection - cancel existing subscription and update to free plan
     if (planName === FREE_PLAN) {
+      try {
+        // First cancel any existing subscription
+        if (currentSubscription) {
+          const cancelFormData = new FormData();
+          cancelFormData.set("intent", "cancel");
+          cancelFormData.set("subscriptionId", currentSubscription.id);
+          
+          // Submit cancellation first
+          submit(cancelFormData, { method: "post" });
+          
+          // Wait a moment for cancellation to process, then update to free plan
+          setTimeout(() => {
+            const updateFormData = new FormData();
+            updateFormData.set("intent", "manualUpdate");
+            updateFormData.set("planName", "free");
+            submit(updateFormData, { method: "post" });
+          }, 1000);
+        } else {
+          // No existing subscription, just update to free plan
+          const updateFormData = new FormData();
+          updateFormData.set("intent", "manualUpdate");
+          updateFormData.set("planName", "free");
+          submit(updateFormData, { method: "post" });
+        }
+      } catch (e) {
+        console.error("[BILLING] Failed to process free plan selection:", e);
+      }
       return;
     }
 
@@ -850,7 +877,7 @@ export default function Pricing() {
                   period=""
                   description="Perfect for trying out our SEO optimization"
                   features={planFeatures.map(f => f.free)}
-                  buttonText={user.plan === "free" && !currentSubscription ? "Current Plan" : "Get Started Free"}
+                  buttonText={user.plan === "free" && !currentSubscription ? "Current Plan" : currentSubscription ? "Downgrade to Free" : "Get Started Free"}
                   buttonVariant="secondary"
                   isFree={true}
                   isCurrentPlan={user.plan === "free" && !currentSubscription}

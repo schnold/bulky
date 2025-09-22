@@ -57,46 +57,23 @@ export default function App() {
     return `${basePath}${host ? `?host=${host}` : ''}`;
   }, [host]);
 
-  const handleNavigation = useCallback((path: string) => {
-    const fullPath = getNavPath(path);
-    // Use App Bridge navigation
-    if (shopify?.navigation) {
-      shopify.navigation.navigate(fullPath);
-    } else {
-      // Fallback to window navigation if App Bridge is not available
-      window.location.href = fullPath;
-    }
-  }, [shopify, getNavPath]);
-
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <PolarisAppProvider i18n={polarisTranslations}>
         <Frame>
           <NavMenu>
-            <button 
-              onClick={() => handleNavigation('/app')}
-              style={{ all: 'unset', cursor: 'pointer' }}
-            >
+            <a href={getNavPath('/app')} rel="home">
               Home
-            </button>
-            <button 
-              onClick={() => handleNavigation('/app/products')}
-              style={{ all: 'unset', cursor: 'pointer' }}
-            >
+            </a>
+            <a href={getNavPath('/app/products')}>
               SEO Optimization
-            </button>
-            <button 
-              onClick={() => handleNavigation('/app/pricing')}
-              style={{ all: 'unset', cursor: 'pointer' }}
-            >
+            </a>
+            <a href={getNavPath('/app/pricing')}>
               Pricing
-            </button>
-            <button 
-              onClick={() => handleNavigation('/app/help')}
-              style={{ all: 'unset', cursor: 'pointer' }}
-            >
+            </a>
+            <a href={getNavPath('/app/help')}>
               Help & Support
-            </button>
+            </a>
           </NavMenu>
           <Outlet />
         </Frame>

@@ -1,9 +1,13 @@
 import { Page, Card, Text, Button, BlockStack, InlineStack } from "@shopify/polaris";
+import { AuthenticationTest } from "../components/AuthenticationTest";
 
 export default function Test() {
   return (
-    <Page title="CSS Test">
+    <Page title="App Tests">
       <BlockStack gap="500">
+        {/* Authentication Test */}
+        <AuthenticationTest />
+        
         <Card>
           <BlockStack gap="400">
             <Text variant="headingMd" as="h2">

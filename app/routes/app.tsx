@@ -4,13 +4,12 @@ import { Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-ru
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider, Frame } from "@shopify/polaris";
-import { NavMenu, useAppBridge } from "@shopify/app-bridge-react";
+import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import polarisTranslations from "@shopify/polaris/locales/en.json" with { type: "json" };
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 
-import { initializeSessionTokenAuth } from "../utils/session-token";
-
+import { ModernAppBridgeProvider } from "../components/ModernAppBridge";
 import { authenticate } from "../shopify.server";
 
 export const links = () => [
@@ -34,23 +33,6 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const host = searchParams.get("host");
-  const shopify = useAppBridge();
-
-  // Initialize session token authentication
-  useEffect(() => {
-    if (apiKey && host) {
-      try {
-        initializeSessionTokenAuth({
-          apiKey,
-          host,
-          forceRedirect: true,
-        });
-        console.log("[AUTH] Session token authentication initialized", { apiKey, host });
-      } catch (error) {
-        console.error("[AUTH] Failed to initialize session token auth:", error);
-      }
-    }
-  }, [apiKey, host]);
 
   // Create navigation paths with host parameter
   const getNavPath = useCallback((basePath: string) => {
@@ -59,25 +41,27 @@ export default function App() {
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
-      <PolarisAppProvider i18n={polarisTranslations}>
-        <Frame>
-          <NavMenu>
-            <a href={getNavPath('/app')} rel="home">
-              Home
-            </a>
-            <a href={getNavPath('/app/products')}>
-              SEO Optimization
-            </a>
-            <a href={getNavPath('/app/pricing')}>
-              Pricing
-            </a>
-            <a href={getNavPath('/app/help')}>
-              Help & Support
-            </a>
-          </NavMenu>
-          <Outlet />
-        </Frame>
-      </PolarisAppProvider>
+      <ModernAppBridgeProvider>
+        <PolarisAppProvider i18n={polarisTranslations}>
+          <Frame>
+            <NavMenu>
+              <a href={getNavPath('/app')} rel="home">
+                Home
+              </a>
+              <a href={getNavPath('/app/products')}>
+                SEO Optimization
+              </a>
+              <a href={getNavPath('/app/pricing')}>
+                Pricing
+              </a>
+              <a href={getNavPath('/app/help')}>
+                Help & Support
+              </a>
+            </NavMenu>
+            <Outlet />
+          </Frame>
+        </PolarisAppProvider>
+      </ModernAppBridgeProvider>
     </AppProvider>
   );
 }

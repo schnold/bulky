@@ -40,5 +40,11 @@ scopes = "write_products,read_products,read_product_listings,write_product_listi
 [auth]
 redirect_urls = ["https://b1-bulk-product-seo-enhancer.netlify.app/auth/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/auth/shopify/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/api/auth/callback"]
 
+# Enable direct API access for embedded apps using session tokens
+[admin]
+# Direct API mode allows authenticated fetch calls directly from the frontend
+# online = online access mode (user-specific), offline = offline access mode (shop-specific)
+direct_api_mode = "online"
+
 [pos]
 embedded = false

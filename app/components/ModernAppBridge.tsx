@@ -137,22 +137,26 @@ export function useModal() {
 // Add type declaration for the shopify global variable
 declare global {
   interface Window {
-    shopify: {
-      toast: {
+    shopify?: {
+      webVitals?: {
+        onReport: (cb: (metrics: any) => void) => void;
+      };
+      toast?: {
         show: (message: string, options?: { duration?: number; isError?: boolean }) => void;
       };
-      modal: {
+      modal?: {
         show: (message: string, options?: { title?: string }) => void;
       };
-      resourcePicker: (options: { type: string; multiple?: boolean }) => Promise<any>;
-      config: {
-        apiKey: string;
-        host: string;
-        locale: string;
+      resourcePicker?: (options: { type: string; multiple?: boolean }) => Promise<any>;
+      config?: {
+        apiKey?: string;
+        host?: string;
+        locale?: string;
         sessionToken?: string;
+        shop?: string;
       };
-      idToken: () => Promise<string>;
-      environment: {
+      idToken?: () => Promise<string>;
+      environment?: {
         embedded: boolean;
         mobile: boolean;
         pos: boolean;

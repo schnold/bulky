@@ -31,8 +31,7 @@ export default function App() {
         <Links />
         {/* Modern App Bridge - CDN script that auto-updates */}
         <script 
-          src="https://cdn.shopify.com/shopifycloud/app-bridge.js" 
-          defer
+          src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
           onError={(e) => {
             console.error('Failed to load App Bridge script:', e);
           }}
@@ -41,6 +40,41 @@ export default function App() {
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // Enhanced App Bridge initialization and debugging
+              console.log('[App Bridge] Starting initialization...');
+              
+              // Check if we're in an iframe context
+              if (window !== window.top) {
+                console.log('[App Bridge] Running in iframe context');
+              } else {
+                console.log('[App Bridge] Running in top-level context');
+              }
+              
+              // Monitor App Bridge script loading
+              const script = document.querySelector('script[src*="app-bridge.js"]');
+              if (script) {
+                script.addEventListener('load', function() {
+                  console.log('[App Bridge] Script loaded successfully');
+                  
+                  // Check if shopify global is available
+                  setTimeout(() => {
+                    if (window.shopify) {
+                      console.log('[App Bridge] Shopify global available:', {
+                        hasWebVitals: !!window.shopify.webVitals,
+                        hasConfig: !!window.shopify.config,
+                        apiKey: window.shopify.config?.apiKey ? 'present' : 'missing'
+                      });
+                    } else {
+                      console.warn('[App Bridge] Shopify global not available after script load');
+                    }
+                  }, 100);
+                });
+                
+                script.addEventListener('error', function(e) {
+                  console.error('[App Bridge] Script failed to load:', e);
+                });
+              }
+              
               // Prevent inject.js errors by ensuring DOM is ready
               if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function() {

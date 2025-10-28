@@ -22,17 +22,32 @@ export function ModernAppBridgeProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     // Wait for the global shopify variable to be available
     const checkShopify = () => {
-      if (typeof window !== 'undefined' && window.shopify) {
-        setShopify(window.shopify);
-        setIsReady(true);
-        console.log('[Modern App Bridge] Shopify global variable ready');
-      } else {
-        // Retry after a short delay if not available yet
+      // Check if we're in a valid iframe context
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      // Additional safety check for iframe context
+      try {
+        if (window.shopify) {
+          setShopify(window.shopify);
+          setIsReady(true);
+          console.log('[Modern App Bridge] Shopify global variable ready');
+        } else {
+          // Retry after a short delay if not available yet
+          setTimeout(checkShopify, 100);
+        }
+      } catch (error) {
+        console.warn('[Modern App Bridge] Error accessing shopify global:', error);
+        // Still retry in case it's a temporary issue
         setTimeout(checkShopify, 100);
       }
     };
 
-    checkShopify();
+    // Add a small delay to ensure DOM is ready
+    const timeoutId = setTimeout(checkShopify, 50);
+    
+    return () => clearTimeout(timeoutId);
   }, []);
 
   return (

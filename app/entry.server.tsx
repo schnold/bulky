@@ -5,6 +5,7 @@ import { isbot } from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
 import { PassThrough } from "stream";
 import { StrictMode } from "react";
+import { addDocumentResponseHeaders } from "./shopify.server";
 
 export const streamTimeout = 5000;
 
@@ -56,9 +57,5 @@ export default async function handleRequest(
   });
 }
 
-export function addDocumentResponseHeaders(
-  request: Request,
-  responseHeaders: Headers
-) {
-  // Add any global response headers here
-}
+// This function is now imported from shopify.server.ts
+// The addDocumentResponseHeaders function from Shopify handles iframe protection

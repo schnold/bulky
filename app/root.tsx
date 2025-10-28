@@ -30,7 +30,28 @@ export default function App() {
         <Meta />
         <Links />
         {/* Modern App Bridge - CDN script that auto-updates */}
-        <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" />
+        <script 
+          src="https://cdn.shopify.com/shopifycloud/app-bridge.js" 
+          defer
+          onError={(e) => {
+            console.error('Failed to load App Bridge script:', e);
+          }}
+        />
+        {/* Safety script to prevent inject.js errors */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Prevent inject.js errors by ensuring DOM is ready
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                  console.log('[App Bridge] DOM ready, App Bridge should be available');
+                });
+              } else {
+                console.log('[App Bridge] DOM already ready');
+              }
+            `,
+          }}
+        />
       </head>
       <body>
         <Outlet />

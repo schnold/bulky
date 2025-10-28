@@ -10,6 +10,7 @@ import polarisTranslations from "@shopify/polaris/locales/en.json" with { type: 
 import { useCallback } from "react";
 
 import { ModernAppBridgeProvider } from "../components/ModernAppBridge";
+import { IframeErrorBoundary } from "../components/IframeErrorBoundary";
 import { authenticate } from "../shopify.server";
 
 export const links = () => [
@@ -40,29 +41,31 @@ export default function App() {
   }, [host]);
 
   return (
-    <AppProvider isEmbeddedApp apiKey={apiKey}>
-      <ModernAppBridgeProvider>
-        <PolarisAppProvider i18n={polarisTranslations}>
-          <Frame>
-            <NavMenu>
-              <a href={getNavPath('/app')} rel="home">
-                Home
-              </a>
-              <a href={getNavPath('/app/products')}>
-                SEO Optimization
-              </a>
-              <a href={getNavPath('/app/pricing')}>
-                Pricing
-              </a>
-              <a href={getNavPath('/app/help')}>
-                Help & Support
-              </a>
-            </NavMenu>
-            <Outlet />
-          </Frame>
-        </PolarisAppProvider>
-      </ModernAppBridgeProvider>
-    </AppProvider>
+    <IframeErrorBoundary>
+      <AppProvider isEmbeddedApp apiKey={apiKey}>
+        <ModernAppBridgeProvider>
+          <PolarisAppProvider i18n={polarisTranslations}>
+            <Frame>
+              <NavMenu>
+                <a href={getNavPath('/app')} rel="home">
+                  Home
+                </a>
+                <a href={getNavPath('/app/products')}>
+                  SEO Optimization
+                </a>
+                <a href={getNavPath('/app/pricing')}>
+                  Pricing
+                </a>
+                <a href={getNavPath('/app/help')}>
+                  Help & Support
+                </a>
+              </NavMenu>
+              <Outlet />
+            </Frame>
+          </PolarisAppProvider>
+        </ModernAppBridgeProvider>
+      </AppProvider>
+    </IframeErrorBoundary>
   );
 }
 

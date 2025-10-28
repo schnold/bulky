@@ -40,7 +40,6 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { DeleteIcon, PlusIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
-import { PerformanceTest } from "../components/PerformanceTest";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -347,8 +346,6 @@ export default function Index() {
       <BlockStack gap="500">
         <Layout>
           <Layout.Section>
-            {/* Performance Test Component - Temporary for debugging */}
-            <PerformanceTest />
             <Card>
               <BlockStack gap="400">
                 <Text as="h2" variant="headingMd">

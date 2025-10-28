@@ -143,16 +143,20 @@ export default function Index() {
   const fetcher = useFetcher<ActionResponse>();
   const userDataFetcher = useFetcher<{ user?: UserData; error?: string }>();
   const accountDataFetcher = useFetcher<{ user?: Pick<UserData, 'plan' | 'credits' | 'shop' | 'createdAt'>; error?: string }>();
+  const discountFetcher = useFetcher<{ success: boolean; error?: string; creditsGranted?: number; newBalance?: number }>();
   const navigate = useNavigate();
 
   const [newKeyword, setNewKeyword] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastError, setToastError] = useState(false);
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountApplied, setDiscountApplied] = useState(false);
 
   const isLoading = ["loading", "submitting"].includes(fetcher.state);
   const isUserDataLoading = ["loading", "submitting"].includes(userDataFetcher.state);
   const isAccountDataLoading = ["loading", "submitting"].includes(accountDataFetcher.state);
+  const isDiscountLoading = ["loading", "submitting"].includes(discountFetcher.state);
   
   // Get user data - either from the async fetch or null for loading state
   const user = userDataFetcher.data?.user;
@@ -176,6 +180,25 @@ export default function Index() {
       accountDataFetcher.load("/api/user-data");
     }
   }, [fetcher.data]);
+
+  // Handle discount code redemption responses
+  useEffect(() => {
+    if (discountFetcher.data) {
+      if (discountFetcher.data.success) {
+        setToastMessage(`Success! ${discountFetcher.data.creditsGranted} credits added to your account. New balance: ${discountFetcher.data.newBalance}`);
+        setToastError(false);
+        setShowToast(true);
+        setDiscountCode("");
+        setDiscountApplied(true);
+        // Refresh account data to show new credit balance
+        accountDataFetcher.load("/api/user-data");
+      } else if (discountFetcher.data.error) {
+        setToastMessage(discountFetcher.data.error);
+        setToastError(true);
+        setShowToast(true);
+      }
+    }
+  }, [discountFetcher.data]);
 
   // Handle form responses
   useEffect(() => {
@@ -206,7 +229,7 @@ export default function Index() {
 
   const handleDeleteKeyword = useCallback((keywordId: string) => {
     if (!user) return;
-    
+
     fetcher.submit(
       {
         intent: "deleteKeyword",
@@ -215,6 +238,18 @@ export default function Index() {
       { method: "POST" }
     );
   }, [fetcher, user]);
+
+  const handleApplyDiscount = useCallback(() => {
+    if (discountCode.trim() === "") return;
+
+    const formData = new FormData();
+    formData.append("code", discountCode.trim());
+
+    discountFetcher.submit(formData, {
+      method: "POST",
+      action: "/app/redeem-discount",
+    });
+  }, [discountCode, discountFetcher]);
 
   const getPlanBadge = (plan: string) => {
     const planConfig = {
@@ -489,6 +524,37 @@ export default function Index() {
                     onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
                     >
                       {accountData.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
+                    </Button>
+                  </BlockStack>
+                </Card>
+              ) : null}
+
+              {/* Discount Code Card */}
+              {accountData && !discountApplied ? (
+                <Card>
+                  <BlockStack gap="400">
+                    <Text as="h2" variant="headingMd">
+                      Have a Discount Code?
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Enter your discount code to receive free credits and try out the app.
+                    </Text>
+                    <TextField
+                      label="Discount Code"
+                      value={discountCode}
+                      onChange={setDiscountCode}
+                      placeholder="Enter code"
+                      autoComplete="off"
+                      disabled={isDiscountLoading}
+                    />
+                    <Button
+                      variant="primary"
+                      fullWidth
+                      onClick={handleApplyDiscount}
+                      disabled={!discountCode.trim() || isDiscountLoading}
+                      loading={isDiscountLoading}
+                    >
+                      Apply Code
                     </Button>
                   </BlockStack>
                 </Card>

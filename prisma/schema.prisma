@@ -89,3 +89,31 @@ model ProductOptimization {
   @@index([shop]) // Index for efficient shop-based queries
   @@index([userId]) // Index for user-based queries
 }
+
+model DiscountCode {
+  id              String                    @id @default(cuid())
+  code            String                    @unique // The discount code (e.g., "WELCOME50")
+  creditsToGrant  Int                       // Number of credits to grant
+  maxUses         Int?                      // Maximum total uses (null = unlimited)
+  currentUses     Int                       @default(0) // Track how many times it's been used
+  isActive        Boolean                   @default(true) // Can be deactivated
+  expiresAt       DateTime?                 // Optional expiration date
+  description     String?                   // Optional description for admin reference
+  redemptions     DiscountCodeRedemption[]
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([code]) // Fast lookup by code
+}
+
+model DiscountCodeRedemption {
+  id             String       @id @default(cuid())
+  discountCodeId String
+  discountCode   DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  shop           String       // Shop domain that redeemed the code
+  creditsGranted Int          // How many credits were granted
+  redeemedAt     DateTime     @default(now())
+
+  @@unique([discountCodeId, shop]) // One redemption per shop per code
+  @@index([shop]) // Fast lookup by shop
+}

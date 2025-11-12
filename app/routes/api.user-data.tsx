@@ -1,20 +1,21 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { validateDualAuth } from "../utils/session-token.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
-    const { admin, session } = await authenticate.admin(request);
+    // Validate both session token (from frontend) and OAuth session (for API access)
+    const { sessionToken, shopifySession, admin } = await validateDualAuth(request);
 
-    if (!session || !session.shop) {
-      throw new Response("Unauthorized", { status: 401 });
-    }
-
-    console.log(`🔍 API USER DATA - Session shop: ${session.shop}`);
+    console.log(`🔍 API USER DATA - Session token validated:`, {
+      shop: sessionToken.shop,
+      userId: sessionToken.userId,
+      oauthShop: shopifySession.shop,
+    });
 
     // Get user data from database (user is guaranteed to exist from app.tsx loader)
     const { ensureUserExists } = await import("../utils/db.server");
-    let user = await ensureUserExists(session.shop, true); // Include keywords
+    let user = await ensureUserExists(shopifySession.shop, true); // Include keywords
 
     // Check current subscriptions and sync if needed
     try {
@@ -31,18 +32,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           }
         }
       `;
-      
+
       const response = await admin.graphql(query);
       const data = await response.json();
       const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
-      
+
       // Sync user plan with actual subscription status (fallback if webhook was missed)
       const { syncUserPlanWithSubscription } = await import("../models/user.server");
-      const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
+      const syncResult = await syncUserPlanWithSubscription(shopifySession.shop, subscriptions);
       if (syncResult?.updated) {
         console.log(`🔄 API USER DATA: User plan synced successfully:`, syncResult);
         // Get fresh user data after sync (don't mutate existing object)
-        user = await ensureUserExists(session.shop, true);
+        user = await ensureUserExists(shopifySession.shop, true);
       }
     } catch (error) {
       console.error('🔄 API USER DATA: Error syncing user plan:', error);

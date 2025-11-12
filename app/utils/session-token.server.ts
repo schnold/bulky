@@ -168,4 +168,64 @@ export async function getSessionTokenInfo(request: Request): Promise<{
   };
 }
 
+/**
+ * Dual authentication helper for routes that need both session token validation
+ * and Shopify Admin API access. Use this in routes that:
+ * 1. Need to verify the request is from an authenticated embedded app frontend (session token)
+ * 2. Need to make requests to Shopify APIs (OAuth access token)
+ *
+ * Example:
+ * ```typescript
+ * export async function action({ request }: ActionFunctionArgs) {
+ *   const { sessionToken, shopifySession, admin } = await validateDualAuth(request);
+ *
+ *   // sessionToken contains: shop, userId from the frontend request
+ *   // shopifySession contains: shop, accessToken for API calls
+ *   // admin is the Shopify Admin API client
+ *
+ *   // Use sessionToken.shop to identify the user making the request
+ *   // Use admin to make Shopify API calls
+ * }
+ * ```
+ */
+export async function validateDualAuth(request: Request) {
+  const { authenticate } = await import("../shopify.server");
+
+  // First, validate the session token from the frontend
+  const sessionTokenInfo = await getSessionTokenInfo(request);
+
+  if (!sessionTokenInfo.isValid) {
+    throw new Response(
+      `Session token validation failed: ${sessionTokenInfo.error}`,
+      { status: 401 }
+    );
+  }
+
+  // Then get the OAuth session for Shopify API access
+  const { admin, session } = await authenticate.admin(request);
+
+  if (!session || !session.shop) {
+    throw new Response("OAuth session not found", { status: 401 });
+  }
+
+  // Verify that the session token shop matches the OAuth session shop
+  if (sessionTokenInfo.shop !== session.shop) {
+    console.error(
+      `[DUAL_AUTH] Shop mismatch - Session token: ${sessionTokenInfo.shop}, OAuth: ${session.shop}`
+    );
+    throw new Response("Shop mismatch between session token and OAuth session", {
+      status: 401
+    });
+  }
+
+  return {
+    sessionToken: {
+      shop: sessionTokenInfo.shop!,
+      userId: sessionTokenInfo.userId!,
+    },
+    shopifySession: session,
+    admin,
+  };
+}
+
 export type { SessionTokenPayload };

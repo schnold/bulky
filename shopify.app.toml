@@ -12,7 +12,7 @@ include_config_on_deploy = true
 automatically_update_urls_on_dev = false
 
 [webhooks]
-api_version = "2025-01"
+api_version = "2025-04"
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]

@@ -1,10 +1,18 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { authenticate } from "../shopify.server";
+import { validateDualAuth } from "../utils/session-token.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
-    const { session } = await authenticate.admin(request);
+    // Validate both session token (from frontend) and OAuth session (for API access)
+    const { sessionToken, shopifySession, admin } = await validateDualAuth(request);
+
+    console.log(`🔐 API PUBLISH - Session token validated:`, {
+      shop: sessionToken.shop,
+      userId: sessionToken.userId,
+      oauthShop: shopifySession.shop,
+    });
+
     const formData = await request.formData();
     const intent = formData.get("intent");
 
@@ -12,7 +20,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       // Single product publish
       const productId = formData.get("productId") as string;
       const optimizedDataStr = formData.get("optimizedData") as string;
-      
+
       if (!productId || !optimizedDataStr) {
         return json({ error: "Missing product data" }, { status: 400 });
       }
@@ -21,7 +29,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       // Use serverless-compatible GraphQL client
       const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
-      const adminClient = createServerlessAdminClient(session.shop, session.accessToken!);
+      const adminClient = createServerlessAdminClient(shopifySession.shop, shopifySession.accessToken!);
 
       // Update the product using Shopify GraphQL API
       const updateResponse = await adminClient.graphql(
@@ -75,10 +83,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const { markProductAsOptimized } = await import("../models/product-optimization.server");
         
         try {
-          const user = await ensureUserExists(session.shop);
+          const user = await ensureUserExists(shopifySession.shop);
           await markProductAsOptimized(
             productId,
-            session.shop,
+            shopifySession.shop,
             user.id,
             {
               title: optimizedData.title,
@@ -116,7 +124,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       
       // Use serverless-compatible GraphQL client
       const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
-      const adminClient = createServerlessAdminClient(session.shop, session.accessToken!);
+      const adminClient = createServerlessAdminClient(shopifySession.shop, shopifySession.accessToken!);
 
       let publishedCount = 0;
       const errors = [];
@@ -163,11 +171,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             try {
               const { ensureUserExists } = await import("../utils/db.server");
               const { markProductAsOptimized } = await import("../models/product-optimization.server");
-              const user = await ensureUserExists(session.shop);
+              const user = await ensureUserExists(shopifySession.shop);
               
               await markProductAsOptimized(
                 productData.id,
-                session.shop,
+                shopifySession.shop,
                 user.id,
                 {
                   title: productData.optimizedData.title,

@@ -42,10 +42,16 @@ import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, sessionToken } = await authenticate.admin(request);
 
   if (!session || !session.shop) {
     throw new Response("Unauthorized", { status: 401 });
+  }
+
+  // For embedded apps, sessionToken is automatically validated by authenticate.admin
+  // sessionToken contains: sub (user ID), dest (shop domain), etc.
+  if (sessionToken) {
+    console.log(`🔐 Session token validated for shop: ${sessionToken.dest}, user: ${sessionToken.sub}`);
   }
 
   // Return minimal data for immediate UI render
@@ -59,10 +65,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
-    const { admin, session } = await authenticate.admin(request);
+    const { admin, session, sessionToken } = await authenticate.admin(request);
 
     if (!session || !session.shop) {
       return json({ error: "Authentication failed" }, { status: 401 });
+    }
+
+    // For embedded apps, sessionToken is automatically validated by authenticate.admin
+    // This ensures the request is authenticated using session tokens
+    if (sessionToken) {
+      console.log(`🔐 Action - Session token validated for shop: ${sessionToken.dest}, user: ${sessionToken.sub}`);
     }
 
     const formData = await request.formData();

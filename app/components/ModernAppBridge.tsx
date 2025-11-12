@@ -1,90 +1,51 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-
 /**
- * Modern App Bridge Context using the global shopify variable
- * This replaces the old createApp approach with the CDN-based App Bridge
+ * Modern App Bridge utilities and re-exports
+ *
+ * This file provides a centralized location for App Bridge functionality.
+ * It uses the official @shopify/app-bridge-react hooks and utilities.
+ *
+ * Note: AppProvider from @shopify/shopify-app-remix already initializes App Bridge,
+ * so no custom provider is needed.
  */
 
-interface ModernAppBridgeContextType {
-  shopify: typeof window.shopify | null;
-  isReady: boolean;
-}
-
-const ModernAppBridgeContext = createContext<ModernAppBridgeContextType>({
-  shopify: null,
-  isReady: false,
-});
-
-export function ModernAppBridgeProvider({ children }: { children: React.ReactNode }) {
-  const [shopify, setShopify] = useState<typeof window.shopify | null>(null);
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    // Wait for the global shopify variable to be available
-    const checkShopify = () => {
-      // Check if we're in a valid iframe context
-      if (typeof window === 'undefined') {
-        return;
-      }
-
-      // Additional safety check for iframe context
-      try {
-        if (window.shopify) {
-          setShopify(window.shopify);
-          setIsReady(true);
-          console.log('[Modern App Bridge] Shopify global variable ready');
-        } else {
-          // Retry after a short delay if not available yet
-          setTimeout(checkShopify, 100);
-        }
-      } catch (error) {
-        console.warn('[Modern App Bridge] Error accessing shopify global:', error);
-        // Still retry in case it's a temporary issue
-        setTimeout(checkShopify, 100);
-      }
-    };
-
-    // Add a small delay to ensure DOM is ready
-    const timeoutId = setTimeout(checkShopify, 50);
-    
-    return () => clearTimeout(timeoutId);
-  }, []);
-
-  return (
-    <ModernAppBridgeContext.Provider value={{ shopify, isReady }}>
-      {children}
-    </ModernAppBridgeContext.Provider>
-  );
-}
+import { useAppBridge } from '@shopify/app-bridge-react';
+import { useCallback } from 'react';
 
 /**
- * Hook to access the modern App Bridge shopify global variable
+ * Hook to access the App Bridge instance
+ * This replaces the old useModernAppBridge hook
  */
 export function useModernAppBridge() {
-  const context = useContext(ModernAppBridgeContext);
-  if (!context) {
-    throw new Error('useModernAppBridge must be used within ModernAppBridgeProvider');
-  }
-  return context;
+  const app = useAppBridge();
+
+  return {
+    shopify: typeof window !== 'undefined' ? window.shopify : null,
+    isReady: !!app,
+    app, // The official App Bridge instance
+  };
 }
 
 /**
- * Hook to show toast notifications using modern App Bridge
+ * Hook to show toast notifications using App Bridge
  */
 export function useToast() {
-  const { shopify, isReady } = useModernAppBridge();
+  const { shopify } = useModernAppBridge();
 
-  const show = (message: string, options?: { isError?: boolean; duration?: number }) => {
-    if (!isReady || !shopify) {
+  const show = useCallback((message: string, options?: { isError?: boolean; duration?: number }) => {
+    if (!shopify) {
       console.warn('[Toast] App Bridge not ready');
       return;
     }
 
-    shopify.toast.show(message, {
-      duration: options?.duration || 5000,
-      isError: options?.isError || false,
-    });
-  };
+    try {
+      shopify.toast?.show(message, {
+        duration: options?.duration || 5000,
+        isError: options?.isError || false,
+      });
+    } catch (error) {
+      console.error('[Toast] Error showing toast:', error);
+    }
+  }, [shopify]);
 
   return { show };
 }
@@ -93,18 +54,18 @@ export function useToast() {
  * Hook to access the resource picker
  */
 export function useResourcePicker() {
-  const { shopify, isReady } = useModernAppBridge();
+  const { shopify } = useModernAppBridge();
 
-  const open = async (options: { type: 'product' | 'collection'; multiple?: boolean }) => {
-    if (!isReady || !shopify) {
-      throw new Error('App Bridge not ready');
+  const open = useCallback(async (options: { type: 'product' | 'collection'; multiple?: boolean }) => {
+    if (!shopify || !shopify.resourcePicker) {
+      throw new Error('Resource picker not available');
     }
 
     return await shopify.resourcePicker({
       type: options.type,
       multiple: options.multiple !== false,
     });
-  };
+  }, [shopify]);
 
   return { open };
 }
@@ -113,26 +74,33 @@ export function useResourcePicker() {
  * Hook for modal actions
  */
 export function useModal() {
-  const { shopify, isReady } = useModernAppBridge();
+  const { shopify } = useModernAppBridge();
 
-  const show = (options: { 
-    title?: string; 
+  const show = useCallback((options: {
+    title?: string;
     message: string;
     primaryAction?: { content: string; onAction: () => void };
     secondaryAction?: { content: string; onAction: () => void };
   }) => {
-    if (!isReady || !shopify) {
+    if (!shopify || !shopify.modal) {
       console.warn('[Modal] App Bridge not ready');
       return;
     }
 
-    shopify.modal.show(options.message, {
-      title: options.title,
-    });
-  };
+    try {
+      shopify.modal.show(options.message, {
+        title: options.title,
+      });
+    } catch (error) {
+      console.error('[Modal] Error showing modal:', error);
+    }
+  }, [shopify]);
 
   return { show };
 }
+
+// Re-export official App Bridge React hooks and components
+export { useAppBridge } from '@shopify/app-bridge-react';
 
 // Add type declaration for the shopify global variable
 declare global {

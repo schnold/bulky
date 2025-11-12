@@ -5,7 +5,8 @@
       "Bash(npx prisma migrate dev:*)",
       "Bash(rg:*)",
       "Bash(find:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(npm run:*)"
     ],
     "deny": []
   }

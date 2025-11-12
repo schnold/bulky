@@ -9,7 +9,6 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import polarisTranslations from "@shopify/polaris/locales/en.json" with { type: "json" };
 import { useCallback } from "react";
 
-import { ModernAppBridgeProvider } from "../components/ModernAppBridge";
 import { IframeErrorBoundary } from "../components/IframeErrorBoundary";
 import { authenticate } from "../shopify.server";
 
@@ -19,7 +18,13 @@ export const links = () => [
 ];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, sessionToken } = await authenticate.admin(request);
+
+  // For embedded apps, sessionToken is automatically validated by authenticate.admin
+  // sessionToken contains: sub (user ID), dest (shop domain), etc.
+  if (sessionToken) {
+    console.log(`🔐 App layout - Session token validated for shop: ${sessionToken.dest}, user: ${sessionToken.sub}`);
+  }
 
   // Ensure user exists for this session
   if (session?.shop) {
@@ -43,27 +48,25 @@ export default function App() {
   return (
     <IframeErrorBoundary>
       <AppProvider isEmbeddedApp apiKey={apiKey}>
-        <ModernAppBridgeProvider>
-          <PolarisAppProvider i18n={polarisTranslations}>
-            <Frame>
-              <NavMenu>
-                <a href={getNavPath('/app')} rel="home">
-                  Home
-                </a>
-                <a href={getNavPath('/app/products')}>
-                  SEO Optimization
-                </a>
-                <a href={getNavPath('/app/pricing')}>
-                  Pricing
-                </a>
-                <a href={getNavPath('/app/help')}>
-                  Help & Support
-                </a>
-              </NavMenu>
-              <Outlet />
-            </Frame>
-          </PolarisAppProvider>
-        </ModernAppBridgeProvider>
+        <PolarisAppProvider i18n={polarisTranslations}>
+          <Frame>
+            <NavMenu>
+              <a href={getNavPath('/app')} rel="home">
+                Home
+              </a>
+              <a href={getNavPath('/app/products')}>
+                SEO Optimization
+              </a>
+              <a href={getNavPath('/app/pricing')}>
+                Pricing
+              </a>
+              <a href={getNavPath('/app/help')}>
+                Help & Support
+              </a>
+            </NavMenu>
+            <Outlet />
+          </Frame>
+        </PolarisAppProvider>
       </AppProvider>
     </IframeErrorBoundary>
   );

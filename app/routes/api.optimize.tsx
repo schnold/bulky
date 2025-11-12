@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { validateDualAuth } from "../utils/session-token.server";
+import { authenticate } from "../shopify.server";
 import {
   updateUserCredits,
   getCreditsForPlan
@@ -222,15 +222,7 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
 
 export const action = async ({ request }: ActionFunctionArgs) => {
 
-  // Validate both session token (from frontend) and OAuth session (for API access)
-  const { sessionToken, shopifySession, admin } = await validateDualAuth(request);
-
-  console.log(`🔐 API OPTIMIZE - Session token validated:`, {
-    shop: sessionToken.shop,
-    userId: sessionToken.userId,
-    oauthShop: shopifySession.shop,
-  });
-
+  const { session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
   const productIds = JSON.parse(formData.get("productIds") as string);
@@ -238,7 +230,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "optimize") {
     // Get user data (user is guaranteed to exist from app.tsx loader)
-    const user = await ensureUserExists(shopifySession.shop);
+    const user = await ensureUserExists(session.shop);
 
     const requiredCredits = productIds.length;
     let hasEnoughCredits = user.credits >= requiredCredits;
@@ -249,9 +241,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (subscription) {
         // If they have a subscription, reset their credits based on plan
         const planCredits = getCreditsForPlan(subscription.name);
-        await updateUserCredits(shopifySession.shop, planCredits);
+        await updateUserCredits(session.shop, planCredits);
         hasEnoughCredits = planCredits >= requiredCredits;
-        console.log(`🔄 Reset credits for ${shopifySession.shop} to ${planCredits} (plan: ${subscription.name})`);
+        console.log(`🔄 Reset credits for ${session.shop} to ${planCredits} (plan: ${subscription.name})`);
       }
     }
 
@@ -274,7 +266,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       try {
         // Use serverless-compatible GraphQL client
         const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
-        const adminClient = createServerlessAdminClient(shopifySession.shop, shopifySession.accessToken!);
+        const adminClient = createServerlessAdminClient(session.shop, session.accessToken!);
 
         // First, get the current product data
         console.log(`📋 Fetching product data for: ${productId}`);
@@ -350,8 +342,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const successfulOptimizations = results.filter(r => r.success).length;
     if (successfulOptimizations > 0) {
       const newCredits = user.credits - successfulOptimizations;
-      await updateUserCredits(shopifySession.shop, newCredits);
-      console.log(`💳 Deducted ${successfulOptimizations} credits from ${shopifySession.shop}. New balance: ${newCredits}`);
+      await updateUserCredits(session.shop, newCredits);
+      console.log(`💳 Deducted ${successfulOptimizations} credits from ${session.shop}. New balance: ${newCredits}`);
     }
 
     console.log(`🏁 Optimization complete! Results: ${results.filter(r => r.success).length} successful, ${results.filter(r => !r.success).length} failed (ready for review)`);

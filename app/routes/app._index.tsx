@@ -35,9 +35,11 @@ import {
   Spinner,
   SkeletonBodyText,
   SkeletonDisplayText,
+  Modal,
+  FormLayout,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { DeleteIcon, PlusIcon } from "@shopify/polaris-icons";
+import { DeleteIcon, PlusIcon, MagicIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 
@@ -164,11 +166,15 @@ export default function Index() {
   const [toastError, setToastError] = useState(false);
   const [discountCode, setDiscountCode] = useState("");
   const [discountApplied, setDiscountApplied] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const keywordGenFetcher = useFetcher<{ success?: boolean; error?: string; message?: string; keywordsAdded?: number; keywords?: string[] }>();
 
   const isLoading = ["loading", "submitting"].includes(fetcher.state);
   const isUserDataLoading = ["loading", "submitting"].includes(userDataFetcher.state);
   const isAccountDataLoading = ["loading", "submitting"].includes(accountDataFetcher.state);
   const isDiscountLoading = ["loading", "submitting"].includes(discountFetcher.state);
+  const isKeywordGenLoading = ["loading", "submitting"].includes(keywordGenFetcher.state);
   
   // Get user data - either from the async fetch or null for loading state
   const user = userDataFetcher.data?.user;
@@ -192,6 +198,27 @@ export default function Index() {
       accountDataFetcher.load("/api/user-data");
     }
   }, [fetcher.data]);
+
+  // Handle AI keyword generation responses
+  useEffect(() => {
+    if (keywordGenFetcher.data) {
+      if (keywordGenFetcher.data.success) {
+        const message = keywordGenFetcher.data.message || 
+          `Successfully generated ${keywordGenFetcher.data.keywordsAdded || 0} keyword(s)`;
+        setToastMessage(message);
+        setToastError(false);
+        setShowToast(true);
+        setShowAIModal(false);
+        setAiInput("");
+        // Refresh user data to show new keywords
+        userDataFetcher.load("/api/user-data");
+      } else if (keywordGenFetcher.data.error) {
+        setToastMessage(keywordGenFetcher.data.error);
+        setToastError(true);
+        setShowToast(true);
+      }
+    }
+  }, [keywordGenFetcher.data]);
 
   // Handle discount code redemption responses
   useEffect(() => {
@@ -262,6 +289,21 @@ export default function Index() {
       action: "/app/redeem-discount",
     });
   }, [discountCode, discountFetcher]);
+
+  const handleGenerateKeywords = useCallback(() => {
+    if (aiInput.trim() === "" || isKeywordGenLoading) return;
+
+    const formData = new FormData();
+    formData.append("userInput", aiInput.trim());
+
+    keywordGenFetcher.submit(formData, {
+      method: "POST",
+      action: "/api/generate-keywords",
+    });
+  }, [aiInput, keywordGenFetcher, isKeywordGenLoading]);
+
+  // Check if user has Pro or Enterprise plan
+  const hasProOrEnterprise = user && (user.plan === "pro" || user.plan === "enterprise");
 
   const getPlanBadge = (plan: string) => {
     const planConfig = {
@@ -364,7 +406,7 @@ export default function Index() {
                   Welcome to your Bulk AI Product Optimizer 💫
                 </Text>
                 <Text variant="bodyMd" as="p">
-                  Optimize your Shopify products with AI-powered SEO using 2025 best practices.
+                  Optimize your Shopify products with AI-powered SEO using 2026 best practices.
                 </Text>
                 <Button 
                   variant="primary"
@@ -427,6 +469,16 @@ export default function Index() {
                     >
                       Add
                     </Button>
+                    {hasProOrEnterprise && (
+                      <Button
+                        onClick={() => setShowAIModal(true)}
+                        disabled={isLoading}
+                        icon={MagicIcon}
+                        variant="secondary"
+                        size="medium"
+                        accessibilityLabel="Generate keywords with AI"
+                      />
+                    )}
                   </InlineStack>
 
                   {/* Keywords List */}
@@ -615,6 +667,63 @@ export default function Index() {
         </Layout>
       </BlockStack>
       {toastMarkup}
+
+      {/* AI Keyword Generation Modal */}
+      <Modal
+        open={showAIModal}
+        onClose={() => {
+          setShowAIModal(false);
+          setAiInput("");
+        }}
+        title="AI Keyword Generator"
+        primaryAction={{
+          content: "Generate Keywords",
+          onAction: handleGenerateKeywords,
+          disabled: aiInput.trim() === "" || isKeywordGenLoading,
+          loading: isKeywordGenLoading,
+        }}
+        secondaryActions={[
+          {
+            content: "Cancel",
+            onAction: () => {
+              setShowAIModal(false);
+              setAiInput("");
+            },
+          },
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="400">
+            <Text variant="bodyMd" as="p">
+              Describe your product, niche, or target market, and our AI will generate high-quality SEO keywords for you.
+            </Text>
+
+            <FormLayout>
+              <TextField
+                label="Describe your product or niche"
+                value={aiInput}
+                onChange={setAiInput}
+                placeholder="e.g., eco-friendly running shoes for marathon runners, wireless bluetooth headphones, organic skincare products..."
+                multiline={4}
+                helpText="Be as specific as possible for better keyword suggestions"
+                autoComplete="off"
+                disabled={isKeywordGenLoading}
+              />
+            </FormLayout>
+
+            {isKeywordGenLoading && (
+              <Box padding="400">
+                <InlineStack align="center" gap="200">
+                  <Spinner size="small" />
+                  <Text as="span" variant="bodySm" tone="subdued">
+                    Generating keywords with AI...
+                  </Text>
+                </InlineStack>
+              </Box>
+            )}
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
     </Page>
   );
 }

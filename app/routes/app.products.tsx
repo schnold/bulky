@@ -67,7 +67,7 @@ interface OptimizedProductData {
   optimizedData: {
     title: string;
     description: string;
-    handle: string;
+    handle?: string;
     productType: string;
     vendor: string;
     tags: string[];

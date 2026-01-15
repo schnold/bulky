@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import {
   updateUserCredits,
+  addUserCredits,
   getCreditsForPlan
 } from "../models/user.server";
 import { getCurrentSubscription } from "../utils/billing.server";
@@ -239,11 +240,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (!hasEnoughCredits) {
       const subscription = await getCurrentSubscription(request);
       if (subscription) {
-        // If they have a subscription, reset their credits based on plan
+        // If they have a subscription, add plan credits to existing balance
         const planCredits = getCreditsForPlan(subscription.name);
-        await updateUserCredits(session.shop, planCredits);
-        hasEnoughCredits = planCredits >= requiredCredits;
-        console.log(`🔄 Reset credits for ${session.shop} to ${planCredits} (plan: ${subscription.name})`);
+        const updatedUser = await addUserCredits(session.shop, planCredits);
+        hasEnoughCredits = updatedUser.credits >= requiredCredits;
+        console.log(`🔄 Added ${planCredits} credits to ${session.shop} (plan: ${subscription.name}). New balance: ${updatedUser.credits}`);
       }
     }
 

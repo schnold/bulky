@@ -1132,7 +1132,7 @@ export default function Products() {
                   AI Product Optimization
                 </Text>
                 <Text variant="bodyMd" tone="subdued" as="p">
-                  Enhance your products with 2025 SEO best practices using AI
+                  Enhance your products with 2026 SEO best practices using AI
                 </Text>
               </BlockStack>
 
@@ -1168,7 +1168,7 @@ export default function Products() {
                       </Text>
                       {subscriptionPlan && (
                         <Text variant="bodySm" tone="subdued" as="span">
-                          {subscriptionPlan} Plan
+                          {subscriptionPlan} 
                         </Text>
                       )}
                     </div>

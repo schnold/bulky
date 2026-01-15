@@ -75,6 +75,23 @@ export async function updateUserCredits(shop: string, credits: number) {
   });
 }
 
+export async function addUserCredits(shop: string, creditsToAdd: number) {
+  if (creditsToAdd <= 0) {
+    console.log(`[CREDITS] Skipping credit addition for ${shop}: creditsToAdd is ${creditsToAdd}`);
+    return await getUserByShop(shop);
+  }
+  
+  const user = await prisma.user.update({
+    where: { shop },
+    data: {
+      credits: { increment: creditsToAdd },
+    },
+  });
+  
+  console.log(`[CREDITS] Added ${creditsToAdd} credits to ${shop}. New balance: ${user.credits}`);
+  return user;
+}
+
 export async function createSubscription(data: {
   shopifySubscriptionId: string;
   userId: string;
@@ -257,9 +274,16 @@ export async function syncUserPlanWithSubscription(shop: string, currentSubscrip
       return { updated: false, currentPlan: user.plan, currentCredits: user.credits };
     }
   } else {
-    console.log(`[SYNC] No active subscription found, ensuring user is on free plan`);
+    console.log(`[SYNC] No active subscription found`);
 
-    // No active subscription, should be on free plan
+    // Preserve manually granted enterprise plans (indicated by enterprise plan with enterprise-level credits)
+    // Enterprise plans may be manually granted and should not be downgraded
+    if (user.plan === "enterprise" && user.credits >= PLAN_CREDITS.enterprise) {
+      console.log(`[SYNC] Preserving manually granted enterprise plan for ${shop}`);
+      return { updated: false, currentPlan: user.plan, currentCredits: user.credits };
+    }
+
+    // No active subscription, should be on free plan (but preserve enterprise)
     if (user.plan !== "free") {
       const result = await updateUserPlanAndAddCredits(shop, "free", 0); // Free plan gets 0 credits added
       const updatedUser = await getUserByShop(shop);

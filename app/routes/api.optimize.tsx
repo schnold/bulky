@@ -102,6 +102,21 @@ Handle: ${product.handle}${contextInfo}${specialInstructionsInfo}
 ❌ Bad: "awesome-running-shoes-for-men-and-women"
 ✅ Good: "nike-air-zoom-pegasus-40-black"
 
+🎯 SEO META TITLE (50-60 characters):
+✅ Primary keyword at the beginning
+✅ Include brand name
+✅ Clear value proposition
+✅ Under 60 characters for optimal display in search results
+✅ Example: "Nike Air Zoom Pegasus 40 - Men's Running Shoes | Shop Now"
+
+📄 SEO META DESCRIPTION (MAXIMUM 150 characters - STRICTLY ENFORCED):
+✅ Compelling summary with primary keywords
+✅ Include call-to-action
+✅ Mention key benefits or features
+✅ MUST be 145-150 characters (NEVER exceed 150!)
+✅ Count every character including spaces and punctuation
+✅ Example: "Shop Nike Air Zoom Pegasus 40 men's running shoes. Lightweight comfort for runners. Free shipping available!"
+
 🏪 VENDOR RULES:
 ✅ Use the shop/brand name as vendor OR leave empty
 ✅ NEVER use "AliExpress" or similar marketplace names
@@ -122,8 +137,12 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
   "productType": "Category > Subcategory > Specific Type",
   "tags": ["primary-keyword", "brand", "attribute1", "use-case", "long-tail-variation", "semantic-variant"],
   "handle": "optimized-url-handle",
-  "vendor": "brand name or empty string (never AliExpress)"
-}`;
+  "vendor": "brand name or empty string (never AliExpress)",
+  "seoTitle": "SEO meta title 50-60 characters with primary keyword and brand",
+  "seoDescription": "SEO meta description EXACTLY 145-150 characters (MAXIMUM 150 - strictly enforced!)"
+}
+
+CRITICAL: The seoDescription MUST NOT exceed 150 characters. Count every character including spaces and punctuation before responding!`;
 
   // Log the complete prompt being sent to OpenRouter
   console.log("=== SENDING PROMPT TO OPENROUTER ===");
@@ -201,7 +220,7 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
     const parsed = JSON.parse(cleanContent);
 
     // Validate required fields
-    if (!parsed.title || !parsed.description || !parsed.productType || !parsed.tags || !parsed.handle) {
+    if (!parsed.title || !parsed.description || !parsed.productType || !parsed.tags || !parsed.handle || !parsed.seoTitle || !parsed.seoDescription) {
       console.error("Incomplete AI response:", parsed);
       throw new Error("AI response missing required fields");
     }
@@ -211,6 +230,12 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
       parsed.vendor.toLowerCase().includes('alibaba') ||
       parsed.vendor.toLowerCase().includes('dhgate'))) {
       parsed.vendor = "";
+    }
+
+    // Enforce SEO description character limit (truncate if needed)
+    if (parsed.seoDescription && parsed.seoDescription.length > 150) {
+      console.warn(`⚠️ SEO description exceeded 150 characters (${parsed.seoDescription.length}), truncating...`);
+      parsed.seoDescription = parsed.seoDescription.substring(0, 147) + "...";
     }
 
     return parsed;

@@ -638,11 +638,17 @@ export default function Products() {
     const optimizedData = optimizedProducts[productId];
     if (!optimizedData) return;
 
-    // Create a copy of optimized data and conditionally remove handle if URL update is disabled
-    const dataToPublish = { ...optimizedData.optimizedData };
-    if (!urlUpdateSettings[productId]) {
-      delete dataToPublish.handle;
-    }
+    // Create formatted data for API (expects tags as string, not array)
+    const optimized = optimizedData.optimizedData;
+    const dataToPublish = {
+      title: optimized.title,
+      description: optimized.description,
+      handle: urlUpdateSettings[productId] !== false ? optimized.handle : optimizedData.originalData.handle,
+      productType: optimized.productType || "",
+      vendor: optimized.vendor || "",
+      // API expects tags as string, not array
+      tags: Array.isArray(optimized.tags) ? optimized.tags.join(", ") : (optimized.tags || ""),
+    };
 
     publishFetcher.submit(
       {
@@ -656,6 +662,53 @@ export default function Products() {
       }
     );
   }, [optimizedProducts, publishFetcher, urlUpdateSettings]);
+
+  // Handle bulk publishing all optimized products
+  const handleBulkPublish = useCallback(() => {
+    const productIds = Object.keys(optimizedProducts).filter(
+      id => !optimizedProducts[id].isPublished
+    );
+
+    if (productIds.length === 0) return;
+
+    // Build bulk publish data with URL update settings applied
+    // Format must match API's BulkPublishSchema: { id, optimizedData: { title, description, handle, tags (string) } }
+    const productsData = productIds.map(productId => {
+      const optimized = optimizedProducts[productId].optimizedData;
+      const dataToPublish = {
+        title: optimized.title,
+        description: optimized.description,
+        handle: urlUpdateSettings[productId] !== false ? optimized.handle : optimizedProducts[productId].originalData.handle,
+        productType: optimized.productType || "",
+        vendor: optimized.vendor || "",
+        // API expects tags as string, not array
+        tags: Array.isArray(optimized.tags) ? optimized.tags.join(", ") : (optimized.tags || ""),
+      };
+      return {
+        id: productId,
+        optimizedData: dataToPublish,
+      };
+    });
+
+    publishFetcher.submit(
+      {
+        intent: "publishBulk",
+        productsData: JSON.stringify(productsData),
+      },
+      {
+        method: "POST",
+        action: "/api/publish"
+      }
+    );
+  }, [optimizedProducts, publishFetcher, urlUpdateSettings]);
+
+  // Handle discarding all optimized products
+  const handleDiscardAll = useCallback(() => {
+    setOptimizedProducts({});
+    setToastMessage("All optimizations discarded");
+    setToastError(false);
+    setShowToast(true);
+  }, []);
 
   // Handle denying/discarding optimized data
   const handleDenyProduct = useCallback((productId: string) => {
@@ -1186,6 +1239,78 @@ export default function Products() {
             </InlineStack>
           </Box>
         </Card>
+
+        {/* Bulk Publish Ready Banner */}
+        {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length > 0 && !bulkOptimizationProgress.isActive && (
+          <Card>
+            <Box padding="400">
+              <BlockStack gap="300">
+                <InlineStack gap="400" align="space-between">
+                  <BlockStack gap="100">
+                    <InlineStack gap="200" align="center">
+                      <div style={{
+                        width: "12px",
+                        height: "12px",
+                        borderRadius: "50%",
+                        backgroundColor: "var(--p-color-bg-success)"
+                      }} />
+                      <Text variant="headingMd" as="h3">
+                        {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length} Optimized Product{Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length !== 1 ? 's' : ''} Ready to Publish
+                      </Text>
+                    </InlineStack>
+                    <Text variant="bodyMd" tone="subdued" as="p">
+                      Review changes below and publish all at once, or manage individually
+                    </Text>
+                  </BlockStack>
+
+                  <InlineStack gap="200">
+                    <Button
+                      variant="primary"
+                      onClick={handleBulkPublish}
+                      loading={publishFetcher.state === "submitting"}
+                      icon={CheckIcon}
+                    >
+                      {`Publish All (${Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length})`}
+                    </Button>
+                    <Button
+                      variant="tertiary"
+                      tone="critical"
+                      onClick={handleDiscardAll}
+                    >
+                      Discard All
+                    </Button>
+                  </InlineStack>
+                </InlineStack>
+
+                {/* Quick summary of optimized products */}
+                <div style={{
+                  display: "flex",
+                  gap: "8px",
+                  flexWrap: "wrap",
+                  paddingTop: "8px",
+                  borderTop: "1px solid var(--p-color-border)"
+                }}>
+                  {Object.keys(optimizedProducts)
+                    .filter(id => !optimizedProducts[id].isPublished)
+                    .slice(0, 5)
+                    .map(productId => {
+                      const product = products.find(p => p.id === productId);
+                      return (
+                        <Badge key={productId} tone="success" size="small">
+                          {product?.title || optimizedProducts[productId].originalData.title}
+                        </Badge>
+                      );
+                    })}
+                  {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length > 5 && (
+                    <Badge tone="info" size="small">
+                      {`+${Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length - 5} more`}
+                    </Badge>
+                  )}
+                </div>
+              </BlockStack>
+            </Box>
+          </Card>
+        )}
 
         {/* Bulk Optimization Progress Bar */}
         {bulkOptimizationProgress.isActive && (

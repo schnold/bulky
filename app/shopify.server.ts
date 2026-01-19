@@ -28,7 +28,6 @@ class LoggingPrismaSessionStorage extends PrismaSessionStorage<typeof prisma> {
       console.log(`🔍 Loaded session:`, session ? {
         id: session.id,
         shop: session.shop,
-        accessToken: session.accessToken ? `SET (${session.accessToken?.substring(0, 8)}...)` : 'NOT SET',
         isOnline: session.isOnline,
         expires: session.expires,
         state: session.state

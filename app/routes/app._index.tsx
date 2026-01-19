@@ -42,6 +42,9 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { DeleteIcon, PlusIcon, MagicIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { getUserByShop, redeemDiscountCode, getCreditsForPlan } from "../models/user.server";
+import { ensureUserExists } from "../utils/db.server";
+import { checkRateLimit } from "../services/rate-limit.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, sessionToken } = await authenticate.admin(request);
@@ -57,10 +60,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   // Return minimal data for immediate UI render
-  return json({ 
+  return json({
     shop: session.shop,
     // User data will be loaded async
-    user: null 
+    user: null
   });
 };
 
@@ -83,11 +86,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const intent = formData.get("intent");
 
     // Ensure user exists before any operations
-    const { ensureUserExists } = await import("../utils/db.server");
     const user = await ensureUserExists(session.shop);
 
     if (!user) {
       return json({ error: "Failed to create or find user" }, { status: 500 });
+    }
+
+    if (intent === "redeemDiscountCode") {
+      const code = (formData.get("code") as string)?.toUpperCase().trim();
+      if (!code) return json({ error: "Code is required" }, { status: 400 });
+
+      // Protect against brute-forcing discount codes (5 attempts per 10 minutes)
+      const rateLimit = await checkRateLimit(session.shop, "redeem-discount", 5, 600);
+      if (!rateLimit.allowed) {
+        return json({
+          error: "Too many attempts",
+          message: "You've tried too many codes. Please wait 10 minutes before trying again."
+        }, { status: 429 });
+      }
+
+      const result = await redeemDiscountCode(code, session.shop);
+      return json(result);
     }
 
     if (intent === "addKeyword") {
@@ -175,11 +194,11 @@ export default function Index() {
   const isAccountDataLoading = ["loading", "submitting"].includes(accountDataFetcher.state);
   const isDiscountLoading = ["loading", "submitting"].includes(discountFetcher.state);
   const isKeywordGenLoading = ["loading", "submitting"].includes(keywordGenFetcher.state);
-  
+
   // Get user data - either from the async fetch or null for loading state
   const user = userDataFetcher.data?.user;
   const userDataError = userDataFetcher.data?.error;
-  
+
   // Get account data separately
   const accountData = accountDataFetcher.data?.user;
   const accountDataError = accountDataFetcher.data?.error;
@@ -203,7 +222,7 @@ export default function Index() {
   useEffect(() => {
     if (keywordGenFetcher.data) {
       if (keywordGenFetcher.data.success) {
-        const message = keywordGenFetcher.data.message || 
+        const message = keywordGenFetcher.data.message ||
           `Successfully generated ${keywordGenFetcher.data.keywordsAdded || 0} keyword(s)`;
         setToastMessage(message);
         setToastError(false);
@@ -408,7 +427,7 @@ export default function Index() {
                 <Text variant="bodyMd" as="p">
                   Optimize your Shopify products with AI-powered SEO using 2026 best practices.
                 </Text>
-                <Button 
+                <Button
                   variant="primary"
                   onClick={() => navigate("/app/products")}
                 >
@@ -424,7 +443,7 @@ export default function Index() {
               <Card>
                 <BlockStack gap="400">
                   <Text as="h2" variant="headingMd">SEO Keywords</Text>
-                    <Box padding="400" background="bg-surface-critical" borderRadius="200">
+                  <Box padding="400" background="bg-surface-critical" borderRadius="200">
                     <Text as="p" variant="bodySm" tone="critical" alignment="center">
                       Error loading keywords: {userDataError}
                     </Text>
@@ -584,7 +603,7 @@ export default function Index() {
                       variant="primary"
                       fullWidth
                       disabled={accountData.plan !== "free"}
-                    onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
+                      onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
                     >
                       {accountData.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
                     </Button>
@@ -654,8 +673,8 @@ export default function Index() {
                           Member Since
                         </Text>
                         <Text as="span" variant="bodySm" fontWeight="semibold">
-                          {accountData?.createdAt ? new Date(accountData.createdAt).toLocaleDateString() : 
-                           user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Loading...'}
+                          {accountData?.createdAt ? new Date(accountData.createdAt).toLocaleDateString() :
+                            user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Loading...'}
                         </Text>
                       </InlineStack>
                     </BlockStack>

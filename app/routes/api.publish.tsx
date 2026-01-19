@@ -1,6 +1,29 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
+import { checkRateLimit } from "../services/rate-limit.server";
+import { z } from "zod";
+
+const OptimizedDataSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().min(1),
+  handle: z.string().min(1),
+  productType: z.string().optional().default(""),
+  vendor: z.string().optional().default(""),
+  tags: z.string().optional().default(""),
+});
+
+const PublishSchema = z.object({
+  productId: z.string().min(1),
+  optimizedData: OptimizedDataSchema,
+});
+
+const BulkPublishSchema = z.object({
+  productsData: z.array(z.object({
+    id: z.string().min(1),
+    optimizedData: OptimizedDataSchema,
+  })).min(1),
+});
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
@@ -9,15 +32,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const intent = formData.get("intent");
 
     if (intent === "publish") {
-      // Single product publish
-      const productId = formData.get("productId") as string;
-      const optimizedDataStr = formData.get("optimizedData") as string;
-
-      if (!productId || !optimizedDataStr) {
-        return json({ error: "Missing product data" }, { status: 400 });
+      // Validate and rate limit single publish
+      const rateLimit = await checkRateLimit(session.shop, "publish", 100, 60); // 100 per minute
+      if (!rateLimit.allowed) {
+        return json({ error: "Rate limit exceeded. Please wait a moment." }, { status: 429 });
       }
 
-      const optimizedData = JSON.parse(optimizedDataStr);
+      const input = {
+        productId: formData.get("productId"),
+        optimizedData: formData.get("optimizedData") ? JSON.parse(formData.get("optimizedData") as string) : undefined,
+      };
+
+      const result = PublishSchema.safeParse(input);
+      if (!result.success) {
+        return json({ error: "Invalid product data", details: result.error.issues }, { status: 400 });
+      }
+
+      const { productId, optimizedData } = result.data;
 
       // Use serverless-compatible GraphQL client
       const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
@@ -69,11 +100,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (updatedProduct) {
         console.log(`🎉 Successfully published product: ${updatedProduct.title}`);
-        
+
         // Mark product as optimized in database
         const { ensureUserExists } = await import("../utils/db.server");
         const { markProductAsOptimized } = await import("../models/product-optimization.server");
-        
+
         try {
           const user = await ensureUserExists(session.shop);
           await markProductAsOptimized(
@@ -91,7 +122,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           console.error(`⚠️ Failed to mark product as optimized in database:`, dbError);
           // Don't fail the whole operation, just log the error
         }
-        
+
         return json({
           success: true,
           productId,
@@ -105,15 +136,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
 
     } else if (intent === "publishBulk") {
-      // Bulk product publish
-      const productsDataStr = formData.get("productsData") as string;
-      
-      if (!productsDataStr) {
-        return json({ error: "Missing products data" }, { status: 400 });
+      // Validate and rate limit bulk publish
+      const rateLimit = await checkRateLimit(session.shop, "publish-bulk", 10, 60); // 10 bulk operations per minute
+      if (!rateLimit.allowed) {
+        return json({ error: "Bulk rate limit exceeded. Please wait a minute." }, { status: 429 });
       }
 
-      const productsData = JSON.parse(productsDataStr);
-      
+      const input = {
+        productsData: formData.get("productsData") ? JSON.parse(formData.get("productsData") as string) : undefined,
+      };
+
+      const result = BulkPublishSchema.safeParse(input);
+      if (!result.success) {
+        return json({ error: "Invalid bulk data", details: result.error.issues }, { status: 400 });
+      }
+
+      const { productsData } = result.data;
+
       // Use serverless-compatible GraphQL client
       const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
       const adminClient = createServerlessAdminClient(session.shop, session.accessToken!);
@@ -158,13 +197,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           } else if (updatedProduct) {
             publishedCount++;
             console.log(`✅ Published: ${updatedProduct.title}`);
-            
+
             // Mark product as optimized in database for bulk publish
             try {
               const { ensureUserExists } = await import("../utils/db.server");
               const { markProductAsOptimized } = await import("../models/product-optimization.server");
               const user = await ensureUserExists(session.shop);
-              
+
               await markProductAsOptimized(
                 productData.id,
                 session.shop,
@@ -189,14 +228,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         success: publishedCount > 0,
         publishedCount,
         errors: errors.length > 0 ? errors : undefined,
-        message: errors.length > 0 
+        message: errors.length > 0
           ? `Published ${publishedCount} products, ${errors.length} failed`
           : `Successfully published ${publishedCount} products`
       });
     }
 
     return json({ error: "Invalid intent" }, { status: 400 });
-    
+
   } catch (error) {
     console.error("❌ Publish API error:", error);
     return json({

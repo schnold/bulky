@@ -4,6 +4,12 @@ import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
 import prisma from "../db.server";
 import { getCurrentSubscription } from "../utils/billing.server";
+import { checkRateLimit } from "../services/rate-limit.server";
+import { z } from "zod";
+
+const KeywordSchema = z.object({
+  userInput: z.string().min(1).max(500),
+});
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
@@ -14,10 +20,26 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     const formData = await request.formData();
-    const userInput = formData.get("userInput") as string;
+    const userInputRaw = formData.get("userInput");
 
-    if (!userInput || userInput.trim() === "") {
-      return json({ error: "Input cannot be empty" }, { status: 400 });
+    const result = KeywordSchema.safeParse({ userInput: userInputRaw });
+    if (!result.success) {
+      return json({
+        error: "Invalid request data",
+        details: result.error.issues
+      }, { status: 400 });
+    }
+
+    const { userInput } = result.data;
+
+    // Apply rate limiting (200 per hour)
+    const rateLimit = await checkRateLimit(session.shop, "generate-keywords", 200, 3600);
+    if (!rateLimit.allowed) {
+      return json({
+        error: "Rate limit exceeded",
+        message: `You have reached the limit of 200 keyword generations per hour. Please wait until ${rateLimit.resetTime.toLocaleTimeString()} to continue.`,
+        resetTime: rateLimit.resetTime,
+      }, { status: 429 });
     }
 
     // Ensure user exists
@@ -44,13 +66,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       "B1 Bulk Product SEO Optimizer - Enterprise": "enterprise"
     };
 
-    const userPlan = subscription 
+    const userPlan = subscription
       ? (planMapping[subscription.name] || user.plan)
       : user.plan;
 
     if (userPlan !== "pro" && userPlan !== "enterprise") {
-      return json({ 
-        error: "This feature is only available for Pro and Enterprise plans" 
+      return json({
+        error: "This feature is only available for Pro and Enterprise plans"
       }, { status: 403 });
     }
 
@@ -144,12 +166,12 @@ Example format:
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       if (error instanceof Error && error.name === 'AbortError') {
         console.error("OpenRouter API call was aborted due to timeout");
         throw new Error("AI keyword generation timed out. Please try again.");
       }
-      
+
       console.error("OpenRouter fetch error:", error);
       throw error;
     }
@@ -181,8 +203,8 @@ Example format:
       .filter(k => !existingKeywordsSet.has(k.toLowerCase()));
 
     if (normalizedKeywords.length === 0) {
-      return json({ 
-        success: true, 
+      return json({
+        success: true,
         message: "No new keywords generated (all were duplicates or invalid)",
         keywordsAdded: 0,
         keywords: []
@@ -222,8 +244,8 @@ Example format:
 
   } catch (error) {
     console.error("Keyword generation error:", error);
-    return json({ 
-      error: error instanceof Error ? error.message : "Failed to generate keywords" 
+    return json({
+      error: error instanceof Error ? error.message : "Failed to generate keywords"
     }, { status: 500 });
   }
 };

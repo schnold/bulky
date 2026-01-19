@@ -46,7 +46,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "resend": "^4.7.0",
-    "vite-tsconfig-paths": "^5.0.1"
+    "vite-tsconfig-paths": "^5.0.1",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@remix-run/eslint-config": "^2.16.1",

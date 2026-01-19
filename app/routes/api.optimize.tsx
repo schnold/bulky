@@ -8,6 +8,22 @@ import {
 } from "../models/user.server";
 import { getCurrentSubscription } from "../utils/billing.server";
 import { ensureUserExists } from "../utils/db.server";
+import { checkRateLimit } from "../services/rate-limit.server";
+import { z } from "zod";
+
+const OptimizeSchema = z.object({
+  productIds: z.array(z.string().min(1)).min(1),
+  context: z.object({
+    targetKeywords: z.string().optional(),
+    brand: z.string().optional(),
+    keyFeatures: z.string().optional(),
+    targetAudience: z.string().optional(),
+    useCase: z.string().optional(),
+    competitorAnalysis: z.boolean().optional(),
+    voiceSearchOptimization: z.boolean().optional(),
+    specialInstructions: z.string().optional(),
+  }).optional(),
+});
 
 interface OptimizationContext {
   targetKeywords?: string;
@@ -138,7 +154,7 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
   }, 30000); // 30 second timeout to prevent serverless function timeout
 
   let response, data, content;
-  
+
   try {
     response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -185,12 +201,12 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
   } catch (error) {
     // Clear timeout and handle fetch errors (including aborts)
     clearTimeout(timeoutId);
-    
+
     if (error instanceof Error && error.name === 'AbortError') {
       console.error("OpenRouter API call was aborted due to timeout");
       throw new Error("AI optimization timed out. Please try again.");
     }
-    
+
     console.error("OpenRouter fetch error:", error);
     throw error; // Re-throw other errors
   }
@@ -222,14 +238,40 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
-  const productIds = JSON.parse(formData.get("productIds") as string);
-  const optimizationContext = formData.get("context") ? JSON.parse(formData.get("context") as string) : undefined;
 
   if (intent === "optimize") {
+    // Validate request body
+    const productIdsRaw = formData.get("productIds");
+    const contextRaw = formData.get("context");
+
+    let parsed;
+    try {
+      parsed = OptimizeSchema.parse({
+        productIds: JSON.parse(productIdsRaw as string),
+        context: contextRaw ? JSON.parse(contextRaw as string) : undefined
+      });
+    } catch (error) {
+      return json({
+        error: "Invalid request data",
+        details: error instanceof z.ZodError ? error.issues : "Unknown error"
+      }, { status: 400 });
+    }
+
+    const { productIds, context: optimizationContext } = parsed;
+
+    // Apply rate limiting (500 per hour)
+    const rateLimit = await checkRateLimit(session.shop, "optimize", 500, 3600);
+    if (!rateLimit.allowed) {
+      return json({
+        error: "Rate limit exceeded",
+        message: `You have reached the limit of 500 optimizations per hour. Please wait until ${rateLimit.resetTime.toLocaleTimeString()} to continue.`,
+        resetTime: rateLimit.resetTime,
+      }, { status: 429 });
+    }
+
     // Get user data (user is guaranteed to exist from app.tsx loader)
     const user = await ensureUserExists(session.shop);
 
@@ -243,8 +285,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         // If they have a subscription, add plan credits to existing balance
         const planCredits = getCreditsForPlan(subscription.name);
         const updatedUser = await addUserCredits(session.shop, planCredits);
-        hasEnoughCredits = updatedUser.credits >= requiredCredits;
-        console.log(`🔄 Added ${planCredits} credits to ${session.shop} (plan: ${subscription.name}). New balance: ${updatedUser.credits}`);
+        if (updatedUser) {
+          hasEnoughCredits = updatedUser.credits >= requiredCredits;
+          console.log(`🔄 Added ${planCredits} credits to ${session.shop} (plan: ${subscription.name}). New balance: ${updatedUser.credits}`);
+        }
       }
     }
 
@@ -319,9 +363,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
 
         // Return success with optimized data for client-side storage
-        results.push({ 
-          productId, 
-          success: true, 
+        results.push({
+          productId,
+          success: true,
           optimizedData,
           originalProduct: product
         });

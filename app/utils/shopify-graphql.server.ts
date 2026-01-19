@@ -19,7 +19,7 @@ export async function shopifyGraphQL<T = any>(
   // Handle shop domain - if it already includes .myshopify.com, use as-is, otherwise append it
   const shopDomain = shop.includes('.myshopify.com') ? shop : `${shop}.myshopify.com`;
   const url = `https://${shopDomain}/admin/api/2025-01/graphql.json`;
-  
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -36,7 +36,15 @@ export async function shopifyGraphQL<T = any>(
     throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  const result = await response.json() as ShopifyGraphQLResponse<T>;
+
+  // Basic integrity check
+  if (!result || (typeof result !== 'object') || (!result.data && !result.errors)) {
+    console.error("❌ Malformed GraphQL response from Shopify:", result);
+    throw new Error("Received malformed response from Shopify API");
+  }
+
+  return result;
 }
 
 // Helper function to create a simple admin client that works in serverless
@@ -44,11 +52,11 @@ export function createServerlessAdminClient(shop: string, accessToken: string) {
   return {
     graphql: async <T = any>(query: string, variables?: Record<string, any>) => {
       const result = await shopifyGraphQL<T>(shop, accessToken, query, variables);
-      
+
       if (result.errors && result.errors.length > 0) {
         throw new Error(`GraphQL Error: ${result.errors[0].message}`);
       }
-      
+
       return {
         json: async () => result,
       };

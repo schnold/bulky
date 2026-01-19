@@ -117,3 +117,14 @@ model DiscountCodeRedemption {
   @@unique([discountCodeId, shop]) // One redemption per shop per code
   @@index([shop]) // Fast lookup by shop
 }
+
+model RateLimit {
+  id          String   @id @default(cuid())
+  shop        String
+  action      String   // e.g., "optimize", "generate-keywords"
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+  
+  @@unique([shop, action])
+  @@index([shop])
+}

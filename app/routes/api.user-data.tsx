@@ -10,8 +10,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       throw new Response("Unauthorized", { status: 401 });
     }
 
-    console.log(`🔍 API USER DATA - Session shop: ${session.shop}`);
-
     // Get user data from database (user is guaranteed to exist from app.tsx loader)
     const { ensureUserExists } = await import("../utils/db.server");
     let user = await ensureUserExists(session.shop, true); // Include keywords

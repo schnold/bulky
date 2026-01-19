@@ -55,6 +55,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const adminClient = createServerlessAdminClient(session.shop, session.accessToken!);
 
       // Update the product using Shopify GraphQL API
+      // Build input object, conditionally including handle only if provided
+      const input: any = {
+        id: productId,
+        title: optimizedData.title,
+        descriptionHtml: optimizedData.description,
+        productType: optimizedData.productType,
+        vendor: optimizedData.vendor || "",
+        tags: optimizedData.tags,
+      };
+
+      // Only include handle if it exists (respects "Update URL" checkbox)
+      if (optimizedData.handle) {
+        input.handle = optimizedData.handle;
+      }
+
+      // Include SEO fields if provided
+      if (optimizedData.seoTitle || optimizedData.seoDescription) {
+        input.seo = {};
+        if (optimizedData.seoTitle) {
+          input.seo.title = optimizedData.seoTitle;
+        }
+        if (optimizedData.seoDescription) {
+          input.seo.description = optimizedData.seoDescription;
+        }
+      }
+
       const updateResponse = await adminClient.graphql(
         `mutation updateProduct($input: ProductInput!) {
           productUpdate(input: $input) {
@@ -66,6 +92,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               productType
               vendor
               tags
+              seo {
+                title
+                description
+              }
             }
             userErrors {
               field
@@ -73,17 +103,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
           }
         }`,
-        {
-          input: {
-            id: productId,
-            title: optimizedData.title,
-            descriptionHtml: optimizedData.description,
-            handle: optimizedData.handle,
-            productType: optimizedData.productType,
-            vendor: optimizedData.vendor || "",
-            tags: optimizedData.tags,
-          },
-        }
+        { input }
       );
 
       const updateData = await updateResponse.json();
@@ -162,12 +182,42 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       for (const productData of productsData) {
         try {
+          // Build input object, conditionally including handle only if provided
+          const input: any = {
+            id: productData.id,
+            title: productData.optimizedData.title,
+            descriptionHtml: productData.optimizedData.description,
+            productType: productData.optimizedData.productType,
+            vendor: productData.optimizedData.vendor || "",
+            tags: productData.optimizedData.tags,
+          };
+
+          // Only include handle if it exists (respects "Update URL" checkbox)
+          if (productData.optimizedData.handle) {
+            input.handle = productData.optimizedData.handle;
+          }
+
+          // Include SEO fields if provided
+          if (productData.optimizedData.seoTitle || productData.optimizedData.seoDescription) {
+            input.seo = {};
+            if (productData.optimizedData.seoTitle) {
+              input.seo.title = productData.optimizedData.seoTitle;
+            }
+            if (productData.optimizedData.seoDescription) {
+              input.seo.description = productData.optimizedData.seoDescription;
+            }
+          }
+
           const updateResponse = await adminClient.graphql(
             `mutation updateProduct($input: ProductInput!) {
               productUpdate(input: $input) {
                 product {
                   id
                   title
+                  seo {
+                    title
+                    description
+                  }
                 }
                 userErrors {
                   field
@@ -175,17 +225,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 }
               }
             }`,
-            {
-              input: {
-                id: productData.id,
-                title: productData.optimizedData.title,
-                descriptionHtml: productData.optimizedData.description,
-                handle: productData.optimizedData.handle,
-                productType: productData.optimizedData.productType,
-                vendor: productData.optimizedData.vendor || "",
-                tags: productData.optimizedData.tags,
-              },
-            }
+            { input }
           );
 
           const updateData = await updateResponse.json();

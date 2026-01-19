@@ -27,7 +27,7 @@ import {
   Box,
   Divider,
 } from "@shopify/polaris";
-import { MagicIcon, CheckIcon, CreditCardIcon } from "@shopify/polaris-icons";
+import { MagicIcon, CheckIcon, CreditCardIcon, ViewIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { ClientOnly } from "../components/ClientOnly";
@@ -71,6 +71,8 @@ interface OptimizedProductData {
     productType: string;
     vendor: string;
     tags: string[];
+    seoTitle?: string;
+    seoDescription?: string;
   };
   timestamp: number;
   isPublished: boolean;
@@ -95,6 +97,7 @@ interface LoaderData {
     id: string;
     plan: string;
     credits: number;
+    shop: string;
   };
   subscription?: { planName: string } | null;
 }
@@ -337,6 +340,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         id: user.id,
         plan: user.plan,
         credits: user.credits,
+        shop: session.shop,
       },
       subscription: subscription,
     });
@@ -354,6 +358,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 };
+
+// Helper function to extract numeric product ID from Shopify GID
+function extractProductId(gid: string): string {
+  // gid format: "gid://shopify/Product/123456789"
+  const parts = gid.split('/');
+  return parts[parts.length - 1];
+}
 
 // Sparkle Button Component
 function SparkleButton({
@@ -429,6 +440,7 @@ export default function Products() {
   const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set());
   const [urlUpdateSettings, setUrlUpdateSettings] = useState<{ [productId: string]: boolean }>({});
+  const [seoUpdateSettings, setSeoUpdateSettings] = useState<{ [productId: string]: boolean }>({});
 
   // Derive flags AFTER hooks are declared (no conditional hook calls)
   const hasError = loaderData && typeof loaderData === "object" && "error" in loaderData;
@@ -638,17 +650,19 @@ export default function Products() {
     const optimizedData = optimizedProducts[productId];
     if (!optimizedData) return;
 
-    // Create formatted data for API (expects tags as string, not array)
-    const optimized = optimizedData.optimizedData;
-    const dataToPublish = {
-      title: optimized.title,
-      description: optimized.description,
-      handle: urlUpdateSettings[productId] !== false ? optimized.handle : optimizedData.originalData.handle,
-      productType: optimized.productType || "",
-      vendor: optimized.vendor || "",
-      // API expects tags as string, not array
-      tags: Array.isArray(optimized.tags) ? optimized.tags.join(", ") : (optimized.tags || ""),
-    };
+    // Create a copy of optimized data and conditionally remove fields based on settings
+    const dataToPublish = { ...optimizedData.optimizedData };
+
+    // Remove handle if URL update is disabled (default is enabled)
+    if (urlUpdateSettings[productId] === false) {
+      delete dataToPublish.handle;
+    }
+
+    // Remove SEO fields if SEO update is disabled (default is enabled)
+    if (seoUpdateSettings[productId] === false) {
+      delete dataToPublish.seoTitle;
+      delete dataToPublish.seoDescription;
+    }
 
     publishFetcher.submit(
       {
@@ -661,54 +675,7 @@ export default function Products() {
         action: "/api/publish"
       }
     );
-  }, [optimizedProducts, publishFetcher, urlUpdateSettings]);
-
-  // Handle bulk publishing all optimized products
-  const handleBulkPublish = useCallback(() => {
-    const productIds = Object.keys(optimizedProducts).filter(
-      id => !optimizedProducts[id].isPublished
-    );
-
-    if (productIds.length === 0) return;
-
-    // Build bulk publish data with URL update settings applied
-    // Format must match API's BulkPublishSchema: { id, optimizedData: { title, description, handle, tags (string) } }
-    const productsData = productIds.map(productId => {
-      const optimized = optimizedProducts[productId].optimizedData;
-      const dataToPublish = {
-        title: optimized.title,
-        description: optimized.description,
-        handle: urlUpdateSettings[productId] !== false ? optimized.handle : optimizedProducts[productId].originalData.handle,
-        productType: optimized.productType || "",
-        vendor: optimized.vendor || "",
-        // API expects tags as string, not array
-        tags: Array.isArray(optimized.tags) ? optimized.tags.join(", ") : (optimized.tags || ""),
-      };
-      return {
-        id: productId,
-        optimizedData: dataToPublish,
-      };
-    });
-
-    publishFetcher.submit(
-      {
-        intent: "publishBulk",
-        productsData: JSON.stringify(productsData),
-      },
-      {
-        method: "POST",
-        action: "/api/publish"
-      }
-    );
-  }, [optimizedProducts, publishFetcher, urlUpdateSettings]);
-
-  // Handle discarding all optimized products
-  const handleDiscardAll = useCallback(() => {
-    setOptimizedProducts({});
-    setToastMessage("All optimizations discarded");
-    setToastError(false);
-    setShowToast(true);
-  }, []);
+  }, [optimizedProducts, publishFetcher, urlUpdateSettings, seoUpdateSettings]);
 
   // Handle denying/discarding optimized data
   const handleDenyProduct = useCallback((productId: string) => {
@@ -1581,7 +1548,18 @@ export default function Products() {
                                   <Text variant="headingMd" as="h3" truncate>
                                     {product.title}
                                   </Text>
-                                  <div style={{ flexShrink: 0 }}>
+                                  <div style={{ flexShrink: 0, display: "flex", gap: "8px", alignItems: "center" }}>
+                                    <Button
+                                      icon={ViewIcon}
+                                      variant="tertiary"
+                                      size="micro"
+                                      onClick={() => {
+                                        const productId = extractProductId(product.id);
+                                        const shopifyAdminUrl = `https://admin.shopify.com/store/${user.shop.replace('.myshopify.com', '')}/products/${productId}`;
+                                        window.open(shopifyAdminUrl, '_blank');
+                                      }}
+                                      accessibilityLabel="View in Shopify"
+                                    />
                                     {product.isOptimized ? (
                                       <Badge tone="success" size="small">
                                         ✨ Optimized
@@ -1696,25 +1674,98 @@ export default function Products() {
 
                                             {/* Optimized Handle with checkbox */}
                                             <div style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: "8px",
-                                              justifyContent: "space-between"
+                                              padding: "8px",
+                                              backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                              borderRadius: "6px",
+                                              border: "1px solid var(--p-color-border)"
                                             }}>
-                                              <Text variant="bodySm" tone="subdued" as="span">
-                                                URL: /{optimizedProducts[product.id].optimizedData.handle}
-                                              </Text>
-                                              <Checkbox
-                                                label="Update URL"
-                                                checked={urlUpdateSettings[product.id] ?? true}
-                                                onChange={(checked) => {
-                                                  setUrlUpdateSettings(prev => ({
-                                                    ...prev,
-                                                    [product.id]: checked
-                                                  }));
-                                                }}
-                                              />
+                                              <div style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                                justifyContent: "space-between"
+                                              }}>
+                                                <div style={{ flex: 1 }}>
+                                                  <Text variant="bodySm" tone="subdued" as="span">
+                                                    New URL:
+                                                  </Text>
+                                                  <Text variant="bodySm" fontWeight="medium" as="p">
+                                                    /{optimizedProducts[product.id].optimizedData.handle}
+                                                  </Text>
+                                                </div>
+                                                <Checkbox
+                                                  label="Update URL"
+                                                  checked={urlUpdateSettings[product.id] ?? true}
+                                                  onChange={(checked) => {
+                                                    setUrlUpdateSettings(prev => ({
+                                                      ...prev,
+                                                      [product.id]: checked
+                                                    }));
+                                                  }}
+                                                />
+                                              </div>
                                             </div>
+
+                                            {/* SEO Meta Title */}
+                                            {optimizedProducts[product.id].optimizedData.seoTitle && (
+                                              <div style={{
+                                                padding: "8px",
+                                                backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                                borderRadius: "6px",
+                                                border: "1px solid var(--p-color-border)"
+                                              }}>
+                                                <div style={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: "8px",
+                                                  justifyContent: "space-between"
+                                                }}>
+                                                  <div style={{ flex: 1 }}>
+                                                    <Text variant="bodySm" tone="subdued" as="span">
+                                                      SEO Meta Title:
+                                                    </Text>
+                                                    <Text variant="bodySm" fontWeight="medium" as="p">
+                                                      {optimizedProducts[product.id].optimizedData.seoTitle}
+                                                    </Text>
+                                                    <Badge tone="info" size="small">
+                                                      {optimizedProducts[product.id].optimizedData.seoTitle.length} characters
+                                                    </Badge>
+                                                  </div>
+                                                  <Checkbox
+                                                    label="Update SEO"
+                                                    checked={seoUpdateSettings[product.id] ?? true}
+                                                    onChange={(checked) => {
+                                                      setSeoUpdateSettings(prev => ({
+                                                        ...prev,
+                                                        [product.id]: checked
+                                                      }));
+                                                    }}
+                                                  />
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* SEO Meta Description */}
+                                            {optimizedProducts[product.id].optimizedData.seoDescription && (
+                                              <div style={{
+                                                padding: "8px",
+                                                backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                                borderRadius: "6px",
+                                                border: "1px solid var(--p-color-border)"
+                                              }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                                  <Text variant="bodySm" tone="subdued" as="span">
+                                                    SEO Description:
+                                                  </Text>
+                                                  <Badge tone={optimizedProducts[product.id].optimizedData.seoDescription.length <= 150 ? "success" : "critical"} size="small">
+                                                    {optimizedProducts[product.id].optimizedData.seoDescription.length}/150
+                                                  </Badge>
+                                                </div>
+                                                <Text variant="bodySm" as="p">
+                                                  {optimizedProducts[product.id].optimizedData.seoDescription}
+                                                </Text>
+                                              </div>
+                                            )}
 
                                             {/* Optimized Description Dropdown */}
                                             <div>

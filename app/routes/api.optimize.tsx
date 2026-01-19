@@ -118,6 +118,25 @@ Handle: ${product.handle}${contextInfo}${specialInstructionsInfo}
 ❌ Bad: "awesome-running-shoes-for-men-and-women"
 ✅ Good: "nike-air-zoom-pegasus-40-black"
 
+🎯 SEO META TITLE (50-60 characters):
+✅ Primary keyword at the beginning
+✅ Include brand name
+✅ Clear value proposition
+✅ Under 60 characters for optimal display in search results
+✅ Example: "Nike Air Zoom Pegasus 40 - Men's Running Shoes | Shop Now"
+
+📄 SEO META DESCRIPTION (MAXIMUM 150 characters - MUST END NATURALLY):
+✅ Write COMPLETE sentences that end naturally before 150 characters
+✅ NO incomplete sentences, NO trailing off, NO "..." needed
+✅ Make it self-contained and coherent - every sentence must be complete
+✅ Include primary keywords, benefits, and brief CTA
+✅ Write concisely - use short, punchy sentences
+✅ Aim for 140-150 characters to allow natural sentence endings
+✅ Count characters as you write - ensure the last sentence completes within the limit
+✅ Example (149 chars): "Premium men's running shoes with cushioned comfort. Lightweight design for long-distance runners. Shop now with free shipping!"
+❌ BAD: "Shop Nike Air Zoom Pegasus 40 men's running shoes. Lightweight comfort for runners with breathable mesh and..." (sentence cuts off)
+✅ GOOD: "Nike Air Zoom Pegasus 40 men's running shoes. Lightweight, breathable comfort. Free shipping on all orders!"
+
 🏪 VENDOR RULES:
 ✅ Use the shop/brand name as vendor OR leave empty
 ✅ NEVER use "AliExpress" or similar marketplace names
@@ -138,8 +157,18 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
   "productType": "Category > Subcategory > Specific Type",
   "tags": ["primary-keyword", "brand", "attribute1", "use-case", "long-tail-variation", "semantic-variant"],
   "handle": "optimized-url-handle",
-  "vendor": "brand name or empty string (never AliExpress)"
-}`;
+  "vendor": "brand name or empty string (never AliExpress)",
+  "seoTitle": "SEO meta title 50-60 characters with primary keyword and brand",
+  "seoDescription": "Complete, coherent SEO description that ends naturally at 140-150 characters (NEVER exceed 150!)"
+}
+
+CRITICAL RULES FOR seoDescription:
+1. MUST be complete sentences that end naturally - NO cut-off sentences
+2. MUST NOT exceed 150 characters total (including spaces and punctuation)
+3. Write short, punchy sentences to ensure they complete within the limit
+4. The description must make perfect sense and read coherently
+5. Aim for 140-150 characters to maximize space while ensuring natural endings
+6. Count every character before responding to ensure it fits perfectly`;
 
   // Log the complete prompt being sent to OpenRouter
   console.log("=== SENDING PROMPT TO OPENROUTER ===");
@@ -217,7 +246,7 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
     const parsed = JSON.parse(cleanContent);
 
     // Validate required fields
-    if (!parsed.title || !parsed.description || !parsed.productType || !parsed.tags || !parsed.handle) {
+    if (!parsed.title || !parsed.description || !parsed.productType || !parsed.tags || !parsed.handle || !parsed.seoTitle || !parsed.seoDescription) {
       console.error("Incomplete AI response:", parsed);
       throw new Error("AI response missing required fields");
     }
@@ -227,6 +256,37 @@ RESPOND WITH ONLY THIS JSON FORMAT (no markdown, no explanations):
       parsed.vendor.toLowerCase().includes('alibaba') ||
       parsed.vendor.toLowerCase().includes('dhgate'))) {
       parsed.vendor = "";
+    }
+
+    // Enforce SEO description character limit (truncate if needed - but AI should write it correctly)
+    if (parsed.seoDescription && parsed.seoDescription.length > 150) {
+      console.warn(`⚠️ SEO description exceeded 150 characters (${parsed.seoDescription.length}), attempting smart truncation...`);
+
+      // Try to find the last complete sentence within 150 characters
+      const withinLimit = parsed.seoDescription.substring(0, 150);
+      const lastPeriod = withinLimit.lastIndexOf('.');
+      const lastExclamation = withinLimit.lastIndexOf('!');
+      const lastQuestion = withinLimit.lastIndexOf('?');
+
+      // Find the last sentence boundary
+      const lastSentenceEnd = Math.max(lastPeriod, lastExclamation, lastQuestion);
+
+      if (lastSentenceEnd > 100) {
+        // If we found a sentence boundary after position 100, use it
+        parsed.seoDescription = withinLimit.substring(0, lastSentenceEnd + 1).trim();
+        console.log(`✅ Truncated to last complete sentence: ${parsed.seoDescription.length} characters`);
+      } else {
+        // If no good sentence boundary, find last complete word and add period
+        const lastSpace = withinLimit.lastIndexOf(' ');
+        if (lastSpace > 100) {
+          parsed.seoDescription = withinLimit.substring(0, lastSpace).trim() + '.';
+          console.log(`⚠️ Truncated to last complete word: ${parsed.seoDescription.length} characters`);
+        } else {
+          // Last resort: hard truncate
+          parsed.seoDescription = withinLimit.substring(0, 147) + "...";
+          console.log(`❌ Hard truncated: ${parsed.seoDescription.length} characters`);
+        }
+      }
     }
 
     return parsed;

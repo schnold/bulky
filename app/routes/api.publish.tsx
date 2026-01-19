@@ -7,10 +7,12 @@ import { z } from "zod";
 const OptimizedDataSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
-  handle: z.string().min(1),
+  handle: z.string().optional(),
   productType: z.string().optional().default(""),
   vendor: z.string().optional().default(""),
   tags: z.string().optional().default(""),
+  seoTitle: z.string().optional(),
+  seoDescription: z.string().optional(),
 });
 
 const PublishSchema = z.object({
@@ -38,12 +40,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ error: "Rate limit exceeded. Please wait a moment." }, { status: 429 });
       }
 
-      const input = {
+      const formInput = {
         productId: formData.get("productId"),
         optimizedData: formData.get("optimizedData") ? JSON.parse(formData.get("optimizedData") as string) : undefined,
       };
 
-      const result = PublishSchema.safeParse(input);
+      const result = PublishSchema.safeParse(formInput);
       if (!result.success) {
         return json({ error: "Invalid product data", details: result.error.issues }, { status: 400 });
       }
@@ -162,11 +164,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ error: "Bulk rate limit exceeded. Please wait a minute." }, { status: 429 });
       }
 
-      const input = {
+      const bulkFormInput = {
         productsData: formData.get("productsData") ? JSON.parse(formData.get("productsData") as string) : undefined,
       };
 
-      const result = BulkPublishSchema.safeParse(input);
+      const result = BulkPublishSchema.safeParse(bulkFormInput);
       if (!result.success) {
         return json({ error: "Invalid bulk data", details: result.error.issues }, { status: 400 });
       }
@@ -182,8 +184,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       for (const productData of productsData) {
         try {
-          // Build input object, conditionally including handle only if provided
-          const input: any = {
+          // Build product input object, conditionally including handle only if provided
+          const productInput: any = {
             id: productData.id,
             title: productData.optimizedData.title,
             descriptionHtml: productData.optimizedData.description,
@@ -194,17 +196,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
           // Only include handle if it exists (respects "Update URL" checkbox)
           if (productData.optimizedData.handle) {
-            input.handle = productData.optimizedData.handle;
+            productInput.handle = productData.optimizedData.handle;
           }
 
           // Include SEO fields if provided
           if (productData.optimizedData.seoTitle || productData.optimizedData.seoDescription) {
-            input.seo = {};
+            productInput.seo = {};
             if (productData.optimizedData.seoTitle) {
-              input.seo.title = productData.optimizedData.seoTitle;
+              productInput.seo.title = productData.optimizedData.seoTitle;
             }
             if (productData.optimizedData.seoDescription) {
-              input.seo.description = productData.optimizedData.seoDescription;
+              productInput.seo.description = productData.optimizedData.seoDescription;
             }
           }
 
@@ -225,7 +227,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 }
               }
             }`,
-            { input }
+            { input: productInput }
           );
 
           const updateData = await updateResponse.json();

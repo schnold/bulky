@@ -650,18 +650,34 @@ export default function Products() {
     const optimizedData = optimizedProducts[productId];
     if (!optimizedData) return;
 
-    // Create a copy of optimized data and conditionally remove fields based on settings
-    const dataToPublish = { ...optimizedData.optimizedData };
+    const optimized = optimizedData.optimizedData;
 
-    // Remove handle if URL update is disabled (default is enabled)
-    if (urlUpdateSettings[productId] === false) {
-      delete dataToPublish.handle;
+    // Build data object with proper formatting for API
+    const dataToPublish: Record<string, any> = {
+      title: optimized.title,
+      description: optimized.description,
+      productType: optimized.productType || "",
+      vendor: optimized.vendor || "",
+      // API expects tags as string, not array
+      tags: Array.isArray(optimized.tags) ? optimized.tags.join(", ") : (optimized.tags || ""),
+    };
+
+    // Include handle if URL update is enabled (default is enabled)
+    // If disabled, use original handle to keep URL unchanged
+    if (urlUpdateSettings[productId] !== false && optimized.handle) {
+      dataToPublish.handle = optimized.handle;
+    } else {
+      dataToPublish.handle = optimizedData.originalData.handle;
     }
 
-    // Remove SEO fields if SEO update is disabled (default is enabled)
-    if (seoUpdateSettings[productId] === false) {
-      delete dataToPublish.seoTitle;
-      delete dataToPublish.seoDescription;
+    // Include SEO fields if SEO update is enabled (default is enabled)
+    if (seoUpdateSettings[productId] !== false) {
+      if (optimized.seoTitle) {
+        dataToPublish.seoTitle = optimized.seoTitle;
+      }
+      if (optimized.seoDescription) {
+        dataToPublish.seoDescription = optimized.seoDescription;
+      }
     }
 
     publishFetcher.submit(
@@ -684,8 +700,72 @@ export default function Products() {
       delete updated[productId];
       return updated;
     });
-    
+
     setToastMessage("Optimization discarded");
+    setToastError(false);
+    setShowToast(true);
+  }, []);
+
+  // Handle bulk publishing all optimized products
+  const handleBulkPublish = useCallback(() => {
+    const productIds = Object.keys(optimizedProducts).filter(
+      id => !optimizedProducts[id].isPublished
+    );
+
+    if (productIds.length === 0) return;
+
+    // Build bulk publish data with URL and SEO update settings applied
+    // Format must match API's BulkPublishSchema: { id, optimizedData: { title, description, handle, tags (string), seoTitle, seoDescription } }
+    const productsData = productIds.map(productId => {
+      const optimized = optimizedProducts[productId].optimizedData;
+      const dataToPublish: Record<string, any> = {
+        title: optimized.title,
+        description: optimized.description,
+        productType: optimized.productType || "",
+        vendor: optimized.vendor || "",
+        // API expects tags as string, not array
+        tags: Array.isArray(optimized.tags) ? optimized.tags.join(", ") : (optimized.tags || ""),
+      };
+
+      // Include handle if URL update is enabled (default is enabled)
+      if (urlUpdateSettings[productId] !== false && optimized.handle) {
+        dataToPublish.handle = optimized.handle;
+      } else {
+        dataToPublish.handle = optimizedProducts[productId].originalData.handle;
+      }
+
+      // Include SEO fields if SEO update is enabled (default is enabled)
+      if (seoUpdateSettings[productId] !== false) {
+        if (optimized.seoTitle) {
+          dataToPublish.seoTitle = optimized.seoTitle;
+        }
+        if (optimized.seoDescription) {
+          dataToPublish.seoDescription = optimized.seoDescription;
+        }
+      }
+
+      return {
+        id: productId,
+        optimizedData: dataToPublish,
+      };
+    });
+
+    publishFetcher.submit(
+      {
+        intent: "publishBulk",
+        productsData: JSON.stringify(productsData),
+      },
+      {
+        method: "POST",
+        action: "/api/publish"
+      }
+    );
+  }, [optimizedProducts, publishFetcher, urlUpdateSettings, seoUpdateSettings]);
+
+  // Handle discarding all optimized products
+  const handleDiscardAll = useCallback(() => {
+    setOptimizedProducts({});
+    setToastMessage("All optimizations discarded");
     setToastError(false);
     setShowToast(true);
   }, []);
@@ -1706,8 +1786,8 @@ export default function Products() {
                                               </div>
                                             </div>
 
-                                            {/* SEO Meta Title */}
-                                            {optimizedProducts[product.id].optimizedData.seoTitle && (
+                                            {/* SEO Section - shown when either seoTitle or seoDescription exists */}
+                                            {(optimizedProducts[product.id].optimizedData.seoTitle || optimizedProducts[product.id].optimizedData.seoDescription) && (
                                               <div style={{
                                                 padding: "8px",
                                                 backgroundColor: "var(--p-color-bg-surface-secondary)",
@@ -1718,19 +1798,12 @@ export default function Products() {
                                                   display: "flex",
                                                   alignItems: "center",
                                                   gap: "8px",
-                                                  justifyContent: "space-between"
+                                                  justifyContent: "space-between",
+                                                  marginBottom: "8px"
                                                 }}>
-                                                  <div style={{ flex: 1 }}>
-                                                    <Text variant="bodySm" tone="subdued" as="span">
-                                                      SEO Meta Title:
-                                                    </Text>
-                                                    <Text variant="bodySm" fontWeight="medium" as="p">
-                                                      {optimizedProducts[product.id].optimizedData.seoTitle}
-                                                    </Text>
-                                                    <Badge tone="info" size="small">
-                                                      {optimizedProducts[product.id].optimizedData.seoTitle.length} characters
-                                                    </Badge>
-                                                  </div>
+                                                  <Text variant="bodySm" fontWeight="semibold" as="span">
+                                                    SEO Metadata
+                                                  </Text>
                                                   <Checkbox
                                                     label="Update SEO"
                                                     checked={seoUpdateSettings[product.id] ?? true}
@@ -1742,28 +1815,40 @@ export default function Products() {
                                                     }}
                                                   />
                                                 </div>
-                                              </div>
-                                            )}
 
-                                            {/* SEO Meta Description */}
-                                            {optimizedProducts[product.id].optimizedData.seoDescription && (
-                                              <div style={{
-                                                padding: "8px",
-                                                backgroundColor: "var(--p-color-bg-surface-secondary)",
-                                                borderRadius: "6px",
-                                                border: "1px solid var(--p-color-border)"
-                                              }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                                                  <Text variant="bodySm" tone="subdued" as="span">
-                                                    SEO Description:
-                                                  </Text>
-                                                  <Badge tone={optimizedProducts[product.id].optimizedData.seoDescription.length <= 150 ? "success" : "critical"} size="small">
-                                                    {optimizedProducts[product.id].optimizedData.seoDescription.length}/150
-                                                  </Badge>
-                                                </div>
-                                                <Text variant="bodySm" as="p">
-                                                  {optimizedProducts[product.id].optimizedData.seoDescription}
-                                                </Text>
+                                                {/* SEO Meta Title */}
+                                                {optimizedProducts[product.id].optimizedData.seoTitle && (
+                                                  <div style={{ marginBottom: optimizedProducts[product.id].optimizedData.seoDescription ? "8px" : "0" }}>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                                                      <Text variant="bodySm" tone="subdued" as="span">
+                                                        Meta Title:
+                                                      </Text>
+                                                      <Badge tone="info" size="small">
+                                                        {`${optimizedProducts[product.id].optimizedData.seoTitle?.length || 0} characters`}
+                                                      </Badge>
+                                                    </div>
+                                                    <Text variant="bodySm" fontWeight="medium" as="p">
+                                                      {optimizedProducts[product.id].optimizedData.seoTitle}
+                                                    </Text>
+                                                  </div>
+                                                )}
+
+                                                {/* SEO Meta Description */}
+                                                {optimizedProducts[product.id].optimizedData.seoDescription && (
+                                                  <div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                                                      <Text variant="bodySm" tone="subdued" as="span">
+                                                        Meta Description:
+                                                      </Text>
+                                                      <Badge tone={(optimizedProducts[product.id].optimizedData.seoDescription?.length || 0) <= 150 ? "success" : "critical"} size="small">
+                                                        {`${optimizedProducts[product.id].optimizedData.seoDescription?.length || 0}/150`}
+                                                      </Badge>
+                                                    </div>
+                                                    <Text variant="bodySm" as="p">
+                                                      {optimizedProducts[product.id].optimizedData.seoDescription}
+                                                    </Text>
+                                                  </div>
+                                                )}
                                               </div>
                                             )}
 

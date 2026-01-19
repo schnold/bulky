@@ -43,7 +43,7 @@ const planFeatures: PlanFeature[] = [
     free: "10 credits",
     starter: "100 credits",
     pro: "500 credits",
-    enterprise: "Unlimited",
+    enterprise: "2000 credits",
   },
   {
     name: "AI Product Description Enhancement",

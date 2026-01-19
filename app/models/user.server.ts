@@ -166,7 +166,7 @@ export const PLAN_CREDITS = {
   free: 10,
   starter: 100,
   pro: 500,
-  enterprise: 999999, // Unlimited represented as large number
+  enterprise: 2000,
 };
 
 export function getCreditsForPlan(planName: string): number {

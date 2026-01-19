@@ -164,16 +164,23 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ error: "Bulk rate limit exceeded. Please wait a minute." }, { status: 429 });
       }
 
+      const rawProductsData = formData.get("productsData");
+      console.log(`📦 Bulk publish - Raw data received:`, rawProductsData ? 'DATA_PRESENT' : 'NO_DATA');
+
       const bulkFormInput = {
-        productsData: formData.get("productsData") ? JSON.parse(formData.get("productsData") as string) : undefined,
+        productsData: rawProductsData ? JSON.parse(rawProductsData as string) : undefined,
       };
+
+      console.log(`📦 Bulk publish - Parsed ${bulkFormInput.productsData?.length || 0} products`);
 
       const result = BulkPublishSchema.safeParse(bulkFormInput);
       if (!result.success) {
+        console.error(`❌ Bulk publish - Validation failed:`, result.error.issues);
         return json({ error: "Invalid bulk data", details: result.error.issues }, { status: 400 });
       }
 
       const { productsData } = result.data;
+      console.log(`✅ Bulk publish - Validated ${productsData.length} products for publishing`);
 
       // Use serverless-compatible GraphQL client
       const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
@@ -182,7 +189,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       let publishedCount = 0;
       const errors = [];
 
-      for (const productData of productsData) {
+      for (let i = 0; i < productsData.length; i++) {
+        const productData = productsData[i];
+        console.log(`📦 Bulk publish - Processing product ${i + 1}/${productsData.length}: ${productData.id}`);
+        console.log(`📦 Bulk publish - Product data:`, {
+          id: productData.id,
+          title: productData.optimizedData.title?.substring(0, 50),
+          hasDescription: !!productData.optimizedData.description,
+          handle: productData.optimizedData.handle,
+          hasSeoTitle: !!productData.optimizedData.seoTitle,
+          hasSeoDescription: !!productData.optimizedData.seoDescription,
+        });
+
         try {
           // Build product input object, conditionally including handle only if provided
           const productInput: any = {

@@ -448,9 +448,12 @@ export default function Products() {
   // so hooks below are not considered conditionally called due to early return.
   const isInvalid = !loaderData || typeof loaderData !== "object";
 
-  // Initialize state from loader/search params once we know data is valid
+  // Initialize state from search params ONLY on mount (not on every searchParams change)
+  // This prevents the circular dependency with the debounced effect
+  const [isInitialized, setIsInitialized] = useState(false);
   useEffect(() => {
-    // Always run this effect; guard reads with optional chaining/defaults
+    if (isInitialized) return; // Only run once on mount
+
     const ld = (loaderData as LoaderData | undefined);
     const initialQuery = searchParams.get("query") || "";
     const initialStatus = searchParams.get("status");
@@ -463,7 +466,8 @@ export default function Products() {
     setProductTypeFilter(initialProductType);
     setVendorFilter(initialVendor);
     setSelectedProductsPerPage(initialPerPage);
-  }, [loaderData, searchParams]);
+    setIsInitialized(true);
+  }, [loaderData, searchParams, isInitialized]);
 
   // Persist optimized products to localStorage
   useEffect(() => {
@@ -501,18 +505,46 @@ export default function Products() {
     }
   }, []);
 
-  // Debounced apply of search params
+  // Debounced apply of search params - only updates filter params, preserves pagination
   useEffect(() => {
+    if (!isInitialized) return; // Don't run until initial state is set
+
     const timeoutId = setTimeout(() => {
+      // Build new filter params
+      const newQuery = searchValue || "";
+      const newStatus = statusFilter.length > 0 ? statusFilter[0] : "";
+      const newProductType = productTypeFilter || "";
+      const newVendor = vendorFilter || "";
+
+      // Check if filter params actually changed to avoid unnecessary updates
+      const currentQuery = searchParams.get("query") || "";
+      const currentStatus = searchParams.get("status") || "";
+      const currentProductType = searchParams.get("productType") || "";
+      const currentVendor = searchParams.get("vendor") || "";
+
+      const filtersChanged =
+        newQuery !== currentQuery ||
+        newStatus !== currentStatus ||
+        newProductType !== currentProductType ||
+        newVendor !== currentVendor;
+
+      if (!filtersChanged) return; // No change, don't update
+
+      // Create new params, preserving productsPerPage but resetting pagination (cursor/page)
       const newSearchParams = new URLSearchParams();
-      if (searchValue) newSearchParams.set("query", searchValue);
-      if (statusFilter.length > 0) newSearchParams.set("status", statusFilter[0]);
-      if (productTypeFilter) newSearchParams.set("productType", productTypeFilter);
-      if (vendorFilter) newSearchParams.set("vendor", vendorFilter);
+      if (newQuery) newSearchParams.set("query", newQuery);
+      if (newStatus) newSearchParams.set("status", newStatus);
+      if (newProductType) newSearchParams.set("productType", newProductType);
+      if (newVendor) newSearchParams.set("vendor", newVendor);
+
+      // Preserve productsPerPage setting
+      const perPage = searchParams.get("productsPerPage");
+      if (perPage) newSearchParams.set("productsPerPage", perPage);
+
       setSearchParams(newSearchParams, { replace: true, preventScrollReset: true });
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [searchValue, statusFilter, productTypeFilter, vendorFilter, setSearchParams]);
+  }, [searchValue, statusFilter, productTypeFilter, vendorFilter, setSearchParams, searchParams, isInitialized]);
 
   // Stable callbacks (unconditional). Define with function declarations to avoid lint false-positives.
   const handleSearchChange = useCallback((value: string) => {
@@ -1032,25 +1064,48 @@ export default function Products() {
   useEffect(() => {
     if (publishFetcher.state === "idle" && publishFetcher.data) {
       const data = publishFetcher.data as any;
-      if (data.success) {
-        // Update published status for the products
-        if (data.productId) {
-          // Single product publish - remove from localStorage since it's published
+
+      if (data.productId) {
+        // Single product publish response
+        if (data.success) {
           setOptimizedProducts(prev => {
             const updated = { ...prev };
             delete updated[data.productId];
             return updated;
           });
           setToastMessage(`Successfully published ${data.productTitle || 'product'}`);
-        } else if (data.publishedCount) {
-          // Bulk publish - remove all published items from localStorage
-          setOptimizedProducts({});
-          setToastMessage(`Successfully published ${data.publishedCount} product(s)`);
+          setToastError(false);
+        } else {
+          setToastMessage(data.error || 'Publishing failed');
+          setToastError(true);
         }
-        setToastError(false);
         setShowToast(true);
-      } else {
-        setToastMessage(data.error || 'Publishing failed');
+      } else if (data.publishedCount !== undefined) {
+        // Bulk publish response
+        const hasErrors = data.errors && data.errors.length > 0;
+        const totalAttempted = data.publishedCount + (data.errors?.length || 0);
+
+        if (data.publishedCount > 0) {
+          // Some products were published - clear all optimized products
+          // Note: We can't know which specific ones failed without tracking IDs
+          // So we clear all on any success, user can re-optimize failed ones
+          setOptimizedProducts({});
+        }
+
+        if (hasErrors) {
+          // Partial success or all failed
+          console.error('Bulk publish errors:', data.errors);
+          setToastMessage(data.message || `Published ${data.publishedCount}/${totalAttempted} products. Check console for error details.`);
+          setToastError(true);
+        } else {
+          // Full success
+          setToastMessage(`Successfully published ${data.publishedCount} product(s)`);
+          setToastError(false);
+        }
+        setShowToast(true);
+      } else if (data.error) {
+        // Error response without specific product info
+        setToastMessage(data.error);
         setToastError(true);
         setShowToast(true);
       }

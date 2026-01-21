@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams, useFetcher } from "@remix-run/react";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from "../i18n-shim";
 import {
   Page,
   Layout,

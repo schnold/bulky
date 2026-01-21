@@ -8,25 +8,19 @@ import {
 } from "@remix-run/react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useChangeLanguage } from "remix-i18next/react";
-import { useTranslation } from "react-i18next";
-import i18nextServer from "./i18next.server";
+import { useTranslation } from "./i18n-shim";
 
 // Loader to provide the API key and locale to the frontend
 export async function loader({ request }: LoaderFunctionArgs) {
-  const locale = await i18nextServer.getLocale(request);
   return json({
     apiKey: process.env.SHOPIFY_API_KEY || "",
-    locale,
+    locale: "en",
   });
 }
 
 export default function App() {
   const { apiKey, locale } = useLoaderData<typeof loader>();
   const { i18n } = useTranslation();
-
-  // This hook will change the i18next instance language to the one in the locale variable
-  useChangeLanguage(locale);
 
   return (
     <html lang={i18n.language}>

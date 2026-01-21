@@ -2,7 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import i18nextServer from "../i18next.server";
 import { Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-run/react";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from "../i18n-shim";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider, Frame } from "@shopify/polaris";

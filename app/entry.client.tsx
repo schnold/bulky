@@ -1,42 +1,14 @@
 import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { RemixBrowser } from "@remix-run/react";
-import i18next from "i18next";
-import { I18nextProvider, initReactI18next } from "react-i18next";
-import LanguageDetector from "i18next-browser-languagedetector";
-import Backend from "i18next-http-backend";
-import { getInitialNamespaces } from "remix-i18next/client";
-import i18n from "./i18n"; // your i18n configuration file
 
 async function hydrate() {
-  await i18next
-    .use(initReactI18next) // Tell i18next to use the react-i18next plugin
-    .use(LanguageDetector) // Setup a client-side language detector
-    .use(Backend) // Setup your backend
-    .init({
-      ...i18n, // spread the configuration
-      // This function detects the namespaces your routes rendered server-side used
-      ns: getInitialNamespaces(),
-      backend: { loadPath: "/locales/{{lng}}/{{ns}}.json" },
-      detection: {
-        // Here only enable htmlTag detection, we'll detect the language only
-        // server-side with remix-i18next, then the server will add the
-        // lang attribute to the html tag and i18next will use it here
-        order: ["htmlTag"],
-        // Because we only use htmlTag, there's no need to cache the language in
-        // cookies or localStorage, so we can disable it
-        caches: [],
-      },
-    });
-
   startTransition(() => {
     hydrateRoot(
       document,
-      <I18nextProvider i18n={i18next}>
-        <StrictMode>
-          <RemixBrowser />
-        </StrictMode>
-      </I18nextProvider>
+      <StrictMode>
+        <RemixBrowser />
+      </StrictMode>
     );
   });
 }

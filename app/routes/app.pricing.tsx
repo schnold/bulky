@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, useNavigation, useSubmit } from "@remix-run/react";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from "../i18n-shim";
 import {
   Page,
   Card,

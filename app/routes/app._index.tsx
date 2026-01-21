@@ -19,7 +19,7 @@ type UserData = {
 };
 
 import { useFetcher, useLoaderData, useSearchParams } from "@remix-run/react";
-import { useTranslation } from "react-i18next";
+import { useTranslation } from "../i18n-shim";
 import { Select } from "@shopify/polaris";
 import {
   Page,

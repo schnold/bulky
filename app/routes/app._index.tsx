@@ -18,7 +18,9 @@ type UserData = {
   updatedAt: string;
 };
 
-import { useFetcher, useLoaderData } from "@remix-run/react";
+import { useFetcher, useLoaderData, useSearchParams } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
+import { Select } from "@shopify/polaris";
 import {
   Page,
   Layout,
@@ -41,6 +43,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { DeleteIcon, PlusIcon, MagicIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
+import i18nextServer from "../i18next.server";
 import prisma from "../db.server";
 import { getUserByShop, redeemDiscountCode, getCreditsForPlan } from "../models/user.server";
 import { ensureUserExists } from "../utils/db.server";
@@ -68,7 +71,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-
+  const t = await i18nextServer.getFixedT(request);
   try {
     const { admin, session, sessionToken } = await authenticate.admin(request);
 
@@ -144,7 +147,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           });
         }
 
-        return json({ success: true, message: "Keyword added successfully" });
+        return json({ success: true, message: t("toast_keyword_added") });
       } catch (error) {
         console.error(`❌ Failed to create keyword:`, error);
         return json({ error: "Keyword already exists" }, { status: 400 });
@@ -161,7 +164,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       });
 
-      return json({ success: true, message: "Keyword deleted successfully" });
+      return json({ success: true, message: t("toast_keyword_deleted") });
     }
 
     return json({ error: "Invalid action" }, { status: 400 });
@@ -172,12 +175,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
+  const { t, i18n: i18nInstance } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResponse>();
   const userDataFetcher = useFetcher<{ user?: UserData; error?: string }>();
   const accountDataFetcher = useFetcher<{ user?: Pick<UserData, 'plan' | 'credits' | 'shop' | 'createdAt'>; error?: string }>();
   const discountFetcher = useFetcher<{ success: boolean; error?: string; creditsGranted?: number; newBalance?: number }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [newKeyword, setNewKeyword] = useState("");
   const [showToast, setShowToast] = useState(false);
@@ -243,7 +248,7 @@ export default function Index() {
   useEffect(() => {
     if (discountFetcher.data) {
       if (discountFetcher.data.success) {
-        setToastMessage(`Success! ${discountFetcher.data.creditsGranted} credits added to your account. New balance: ${discountFetcher.data.newBalance}`);
+        setToastMessage(t("toast_discount_success", { credits: discountFetcher.data.creditsGranted, balance: discountFetcher.data.newBalance }));
         setToastError(false);
         setShowToast(true);
         setDiscountCode("");
@@ -321,15 +326,21 @@ export default function Index() {
     });
   }, [aiInput, keywordGenFetcher, isKeywordGenLoading]);
 
+  const handleLanguageChange = useCallback((newLocale: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set("locale", newLocale);
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
   // Check if user has Pro or Enterprise plan
   const hasProOrEnterprise = user && (user.plan === "pro" || user.plan === "enterprise");
 
   const getPlanBadge = (plan: string) => {
     const planConfig = {
-      free: { status: "info" as const, children: "Free Plan" },
-      starter: { status: "success" as const, children: "Starter Plan" },
-      pro: { status: "warning" as const, children: "Pro Plan" },
-      enterprise: { status: "critical" as const, children: "Enterprise Plan" },
+      free: { status: "info" as const, children: t("plan_free") },
+      starter: { status: "success" as const, children: t("plan_starter") },
+      pro: { status: "warning" as const, children: t("plan_pro") },
+      enterprise: { status: "critical" as const, children: t("plan_enterprise") },
     };
 
     return planConfig[plan as keyof typeof planConfig] || { status: "info" as const, children: plan };
@@ -354,7 +365,7 @@ export default function Index() {
         <Box padding="300" background="bg-surface-secondary" borderRadius="200">
           <InlineStack align="center" gap="200">
             <Spinner size="small" />
-            <Text as="span" variant="bodySm" tone="subdued">Loading your keywords...</Text>
+            <Text as="span" variant="bodySm" tone="subdued">{t("loading_keywords")}</Text>
           </InlineStack>
         </Box>
       </BlockStack>
@@ -422,17 +433,34 @@ export default function Index() {
             <Card>
               <BlockStack gap="400">
                 <Text as="h2" variant="headingMd">
-                  Welcome to your Bulk AI Product Optimizer 💫
+                  {t("welcome_title")}
                 </Text>
                 <Text variant="bodyMd" as="p">
-                  Optimize your Shopify products with AI-powered SEO using 2026 best practices.
+                  {t("welcome_description")}
                 </Text>
                 <Button
                   variant="primary"
                   onClick={() => navigate("/app/products")}
                 >
-                  Optimize Products
+                  {t("optimize_products_btn")}
                 </Button>
+              </BlockStack>
+            </Card>
+
+            {/* Language Selector Card */}
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">{t("language_selector_title")}</Text>
+                <Select
+                  label={t("language_selector_title")}
+                  labelHidden
+                  options={[
+                    { label: "English", value: "en" },
+                    { label: "Español", value: "es" },
+                  ]}
+                  onChange={handleLanguageChange}
+                  value={i18nInstance.language}
+                />
               </BlockStack>
             </Card>
 
@@ -442,7 +470,7 @@ export default function Index() {
             ) : userDataError ? (
               <Card>
                 <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">SEO Keywords</Text>
+                  <Text as="h2" variant="headingMd">{t("seo_keywords_title")}</Text>
                   <Box padding="400" background="bg-surface-critical" borderRadius="200">
                     <Text as="p" variant="bodySm" tone="critical" alignment="center">
                       Error loading keywords: {userDataError}
@@ -455,28 +483,28 @@ export default function Index() {
                 <BlockStack gap="400">
                   <InlineStack align="space-between" blockAlign="center">
                     <Text as="h2" variant="headingMd">
-                      SEO Keywords
+                      {t("seo_keywords_title")}
                     </Text>
                     {(!user.keywords || user.keywords.length < 3) && (
                       <Badge tone="attention">
-                        Add 3+ keywords for better results
+                        {t("seo_keywords_badge")}
                       </Badge>
                     )}
                   </InlineStack>
 
                   <Text variant="bodySm" tone="subdued" as="p">
-                    Manage your target keywords for product optimization. More keywords = better AI optimization results.
+                    {t("seo_keywords_description")}
                   </Text>
 
                   {/* Add Keyword Input */}
                   <InlineStack gap="200">
                     <div style={{ flex: 1 }}>
                       <TextField
-                        label="New Keyword"
+                        label={t("new_keyword_placeholder")}
                         labelHidden
                         value={newKeyword}
                         onChange={setNewKeyword}
-                        placeholder="e.g., running shoes"
+                        placeholder={t("new_keyword_placeholder")}
                         autoComplete="off"
                       />
                     </div>
@@ -486,7 +514,7 @@ export default function Index() {
                       icon={PlusIcon}
                       loading={isLoading}
                     >
-                      Add
+                      {t("add_btn")}
                     </Button>
                     {hasProOrEnterprise && (
                       <Button
@@ -504,7 +532,7 @@ export default function Index() {
                   {user.keywords && user.keywords.length > 0 ? (
                     <BlockStack gap="200">
                       <Text as="p" variant="bodyMd" fontWeight="semibold">
-                        Your Keywords ({user.keywords.length})
+                        {t("your_keywords_label", { count: user.keywords.length })}
                       </Text>
                       <Box
                         padding="300"
@@ -535,7 +563,7 @@ export default function Index() {
                       borderRadius="200"
                     >
                       <Text as="p" variant="bodySm" tone="subdued" alignment="center">
-                        No keywords added yet. Add your first keyword to get started!
+                        {t("no_keywords_msg")}
                       </Text>
                     </Box>
                   )}
@@ -552,7 +580,7 @@ export default function Index() {
               ) : accountDataError ? (
                 <Card>
                   <BlockStack gap="400">
-                    <Text as="h2" variant="headingMd">Account Overview</Text>
+                    <Text as="h2" variant="headingMd">{t("account_overview_title")}</Text>
                     <Box padding="400" background="bg-surface-critical" borderRadius="200">
                       <Text as="p" variant="bodySm" tone="critical" alignment="center">
                         Error loading account data: {accountDataError}
@@ -564,20 +592,20 @@ export default function Index() {
                 <Card>
                   <BlockStack gap="400">
                     <Text as="h2" variant="headingMd">
-                      Account Overview
+                      {t("account_overview_title")}
                     </Text>
 
                     <BlockStack gap="300">
                       <InlineStack align="space-between">
                         <Text as="span" variant="bodyMd">
-                          Current Plan
+                          {t("current_plan_label")}
                         </Text>
                         <Badge {...getPlanBadge(accountData.plan)} />
                       </InlineStack>
 
                       <InlineStack align="space-between">
                         <Text as="span" variant="bodyMd">
-                          Optimization Credits
+                          {t("optimization_credits_label")}
                         </Text>
                         <Text as="span" variant="bodyMd" fontWeight="semibold">
                           {accountData.credits}
@@ -587,14 +615,14 @@ export default function Index() {
                       {/* Credits Progress Bar */}
                       <Box>
                         <Text variant="bodySm" tone="subdued" as="p">
-                          Credits Usage
+                          {t("credits_usage_label")}
                         </Text>
                         <ProgressBar
                           progress={(accountData.credits / 100) * 100} // Assuming 100 is max for visual
                           size="small"
                         />
                         <Text variant="bodySm" tone="subdued" as="p">
-                          {accountData.credits > 5 ? "Good" : accountData.credits > 0 ? "Low" : "Empty"}
+                          {accountData.credits > 5 ? t("usage_good") : accountData.credits > 0 ? t("usage_low") : t("usage_empty")}
                         </Text>
                       </Box>
                     </BlockStack>
@@ -605,7 +633,7 @@ export default function Index() {
                       disabled={accountData.plan !== "free"}
                       onClick={() => navigate(`/app/pricing?${new URLSearchParams(window.location.search)}`)}
                     >
-                      {accountData.plan === "free" ? "Upgrade Plan" : "Manage Subscription"}
+                      {accountData.plan === "free" ? t("upgrade_plan_btn") : t("manage_subscription_btn")}
                     </Button>
                   </BlockStack>
                 </Card>
@@ -616,10 +644,10 @@ export default function Index() {
                 <Card>
                   <BlockStack gap="400">
                     <Text as="h2" variant="headingMd">
-                      Have a Discount Code?
+                      {t("have_discount_title")}
                     </Text>
                     <Text as="p" variant="bodySm" tone="subdued">
-                      Enter your discount code to receive free credits and try out the app.
+                      {t("have_discount_description")}
                     </Text>
                     <TextField
                       label="Discount Code"
@@ -636,7 +664,7 @@ export default function Index() {
                       disabled={!discountCode.trim() || isDiscountLoading}
                       loading={isDiscountLoading}
                     >
-                      Apply Code
+                      {t("apply_code_btn")}
                     </Button>
                   </BlockStack>
                 </Card>
@@ -649,12 +677,12 @@ export default function Index() {
                 <Card>
                   <BlockStack gap="200">
                     <Text as="h2" variant="headingMd">
-                      Quick Stats
+                      {t("quick_stats_title")}
                     </Text>
                     <BlockStack gap="200">
                       <InlineStack align="space-between">
                         <Text as="span" variant="bodySm">
-                          Shop
+                          {t("shop_label")}
                         </Text>
                         <Text as="span" variant="bodySm" fontWeight="semibold">
                           {accountData?.shop || user?.shop || loaderData.shop}
@@ -662,7 +690,7 @@ export default function Index() {
                       </InlineStack>
                       <InlineStack align="space-between">
                         <Text as="span" variant="bodySm">
-                          Keywords
+                          {t("keywords_label")}
                         </Text>
                         <Text as="span" variant="bodySm" fontWeight="semibold">
                           {user?.keywords?.length || 0}
@@ -670,7 +698,7 @@ export default function Index() {
                       </InlineStack>
                       <InlineStack align="space-between">
                         <Text as="span" variant="bodySm">
-                          Member Since
+                          {t("member_since_label")}
                         </Text>
                         <Text as="span" variant="bodySm" fontWeight="semibold">
                           {accountData?.createdAt ? new Date(accountData.createdAt).toLocaleDateString() :
@@ -694,16 +722,16 @@ export default function Index() {
           setShowAIModal(false);
           setAiInput("");
         }}
-        title="AI Keyword Generator"
+        title={t("ai_modal_title")}
         primaryAction={{
-          content: "Generate Keywords",
+          content: t("generate_btn"),
           onAction: handleGenerateKeywords,
           disabled: aiInput.trim() === "" || isKeywordGenLoading,
           loading: isKeywordGenLoading,
         }}
         secondaryActions={[
           {
-            content: "Cancel",
+            content: t("cancel_btn"),
             onAction: () => {
               setShowAIModal(false);
               setAiInput("");
@@ -714,17 +742,17 @@ export default function Index() {
         <Modal.Section>
           <BlockStack gap="400">
             <Text variant="bodyMd" as="p">
-              Describe your product, niche, or target market, and our AI will generate high-quality SEO keywords for you.
+              {t("ai_modal_description")}
             </Text>
 
             <FormLayout>
               <TextField
-                label="Describe your product or niche"
+                label={t("ai_modal_input_label")}
                 value={aiInput}
                 onChange={setAiInput}
-                placeholder="e.g., eco-friendly running shoes for marathon runners, wireless bluetooth headphones, organic skincare products..."
+                placeholder={t("ai_modal_input_placeholder")}
                 multiline={4}
-                helpText="Be as specific as possible for better keyword suggestions"
+                helpText={t("ai_modal_input_help")}
                 autoComplete="off"
                 disabled={isKeywordGenLoading}
               />
@@ -735,7 +763,7 @@ export default function Index() {
                 <InlineStack align="center" gap="200">
                   <Spinner size="small" />
                   <Text as="span" variant="bodySm" tone="subdued">
-                    Generating keywords with AI...
+                    {t("ai_modal_generating")}
                   </Text>
                 </InlineStack>
               </Box>

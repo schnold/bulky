@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, useNavigation, useSubmit } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import {
   Page,
   Card,
@@ -25,6 +26,7 @@ import { authenticate, STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN } from "../shopif
 import { ensureUserExists } from "../utils/db.server";
 import { createAppSubscription } from "../utils/billing.server";
 import { manuallyUpdateUserPlan, syncUserPlanWithSubscription } from "../models/user.server";
+import i18nextServer from "../i18next.server";
 
 // Plan constants - keep in sync with shopify.server.ts
 const FREE_PLAN = "Free Plan";
@@ -39,56 +41,56 @@ interface PlanFeature {
 
 const planFeatures: PlanFeature[] = [
   {
-    name: "Monthly SEO Optimization Credits",
+    name: "feature_credits",
     free: "10 credits",
     starter: "100 credits",
     pro: "500 credits",
     enterprise: "2000 credits",
   },
   {
-    name: "AI Product Description Enhancement",
+    name: "feature_ai_desc",
     free: true,
     starter: true,
     pro: true,
     enterprise: true,
   },
   {
-    name: "Advanced SEO Title Optimization",
+    name: "feature_seo_titles",
     free: false,
     starter: true,
     pro: true,
     enterprise: true,
   },
   {
-    name: "Meta Description Generation",
+    name: "feature_meta_desc",
     free: true,
     starter: true,
     pro: true,
     enterprise: true,
   },
   {
-    name: "Keyword Research & Suggestions",
+    name: "feature_keywords",
     free: "Basic",
     starter: "Basic",
     pro: "Advanced",
     enterprise: "Advanced",
   },
   {
-    name: "Competitor Analysis",
+    name: "feature_competitor",
     free: false,
     starter: false,
     pro: false,
     enterprise: true,
   },
   {
-    name: "Bulk Product Optimization",
+    name: "feature_bulk",
     free: "Up to 3",
     starter: "Up to 30",
     pro: "Up to 100",
     enterprise: "Unlimited",
   },
   {
-    name: "Priority Support",
+    name: "feature_support",
     free: false,
     starter: false,
     pro: "Email",
@@ -115,11 +117,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
   let user = await ensureUserExists(session.shop);
-  
+
   // Check for success parameter (user returning from Shopify confirmation)
   const url = new URL(request.url);
   const success = url.searchParams.get("success") === "true";
-  
+
   // Log return from billing for debugging
   if (success) {
     console.log('[BILLING] User returned from billing with shop:', {
@@ -146,12 +148,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
     `;
-    
+
     const response = await admin.graphql(query);
     const data = await response.json();
-    
+
     console.log('[BILLING] Current subscriptions check:', JSON.stringify(data, null, 2));
-    
+
     const subscriptions = data.data?.currentAppInstallation?.activeSubscriptions || [];
     if (subscriptions.length > 0) {
       const activeSubscription = subscriptions[0];
@@ -161,7 +163,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         status: activeSubscription.status,
       };
     }
-    
+
     // Sync user plan with actual subscription status (fallback if webhook was missed)
     try {
       const syncResult = await syncUserPlanWithSubscription(session.shop, subscriptions);
@@ -190,6 +192,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const t = await i18nextServer.getFixedT(request);
   const { session } = await authenticate.admin(request);
 
   const formData = await request.formData();
@@ -218,7 +221,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       isTest: process.env.NODE_ENV !== "production",
       timestamp: new Date().toISOString()
     });
-    
+
     // Validate plan name exists (after normalization)
     const validPlans = [STARTER_PLAN, PRO_PLAN, ENTERPRISE_PLAN];
     if (!planName || !validPlans.includes(planName)) {
@@ -231,7 +234,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       // Create app subscription using GraphQL API (eliminates shop URL prompts)
       const result = await createAppSubscription(request, planName, host);
-      
+
       console.log(`[BILLING] App subscription created successfully:`, {
         confirmationUrl: result.confirmationUrl,
         shop: session.shop,
@@ -239,10 +242,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         subscriptionId: result.appSubscription?.id,
         isManaged: result.isManaged
       });
-      
+
       // Return the URL to the client for iframe breakout redirect
       // Use "redirectUrl" key to match the client-side handler in this file
-      return json({ 
+      return json({
         redirectUrl: result.confirmationUrl,
         planId: (result as any).planKey || planName
       });
@@ -260,15 +263,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "manualUpdate") {
     const planName = formData.get("planName") as string;
-    
+
     try {
       console.log(`[MANUAL] Manual plan update requested for ${session.shop} to plan: ${planName}`);
-      
+
       await manuallyUpdateUserPlan(session.shop, planName);
-      
-      return json({ 
-        success: true, 
-        message: `Plan manually updated to ${planName} with appropriate credits` 
+
+      return json({
+        success: true,
+        message: t("pricing.toast_success_payment")
       });
     } catch (error) {
       console.error(`[MANUAL] Manual plan update failed:`, {
@@ -282,17 +285,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "cancel") {
     const subscriptionId = formData.get("subscriptionId") as string;
-    
+
     console.log(`[BILLING] Cancel request initiated:`, {
       shop: session.shop,
       subscriptionId,
       isTest: process.env.NODE_ENV !== "production",
       timestamp: new Date().toISOString()
     });
-    
+
     try {
       const { admin } = await authenticate.admin(request);
-      
+
       const mutation = `
         mutation appSubscriptionCancel($id: ID!) {
           appSubscriptionCancel(id: $id) {
@@ -307,25 +310,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }
         }
       `;
-      
+
       const variables = { id: subscriptionId };
-      
+
       const response = await admin.graphql(mutation, { variables });
       const data = await response.json();
-      
+
       console.log(`[BILLING] Cancel GraphQL response:`, JSON.stringify(data, null, 2));
-      
+
       if ((data as any).errors) {
         throw new Error(`GraphQL errors: ${JSON.stringify((data as any).errors)}`);
       }
-      
+
       const result = data.data?.appSubscriptionCancel;
       if (result?.userErrors?.length > 0) {
         throw new Error(`Subscription cancellation errors: ${JSON.stringify(result.userErrors)}`);
       }
 
       console.log(`[BILLING] Subscription cancelled successfully:`, { subscriptionId, shop: session.shop });
-      return json({ success: true, message: "Subscription cancelled successfully" });
+      return json({ success: true, message: t("pricing.toast_success_payment") });
     } catch (error) {
       console.error(`[BILLING] Subscription cancellation failed:`, {
         error: error instanceof Error ? error.message : String(error),
@@ -348,20 +351,7 @@ const FeatureIcon = ({ included }: { included: boolean | string }) => {
   return <Icon source={CheckIcon} tone="success" />;
 };
 
-const PricingCard = ({
-  title,
-  price,
-  period,
-  description,
-  features,
-  buttonText,
-  buttonVariant,
-  isPopular,
-  isFree,
-  isCurrentPlan,
-  onSubscribe,
-  loading
-}: {
+interface PricingCardProps {
   title: string;
   price: string;
   period: string;
@@ -374,7 +364,24 @@ const PricingCard = ({
   isCurrentPlan?: boolean;
   onSubscribe: () => void;
   loading: boolean;
-}) => {
+  t: (key: string) => string;
+}
+
+const PricingCard = ({
+  title,
+  price,
+  period,
+  description,
+  features,
+  buttonText,
+  buttonVariant,
+  isPopular,
+  isFree,
+  isCurrentPlan,
+  onSubscribe,
+  loading,
+  t
+}: PricingCardProps) => {
   return (
     <Card>
       <div
@@ -403,17 +410,17 @@ const PricingCard = ({
                   </Text>
                   {isCurrentPlan && (
                     <Badge tone="info" size="small">
-                      ✓ Current Plan
+                      {`✓ ${t("pricing.current_plan")}`}
                     </Badge>
                   )}
                   {isPopular && !isCurrentPlan && (
                     <Badge tone="magic" size="small">
-                      Most Popular
+                      {t("pricing.most_popular")}
                     </Badge>
                   )}
                   {isFree && !isCurrentPlan && (
                     <Badge tone="success" size="small">
-                      Free Forever
+                      {t("pricing.free_forever")}
                     </Badge>
                   )}
                 </InlineStack>
@@ -454,7 +461,7 @@ const PricingCard = ({
                     <Box>
                       <BlockStack gap="100">
                         <Text variant="bodyMd" breakWord as="p">
-                          {feature.name}
+                          {t(feature.name)}
                         </Text>
                         {typeof features[index] === "string" && (
                           <Text variant="bodySm" tone="subdued" as="p">
@@ -479,7 +486,7 @@ const PricingCard = ({
                 disabled={isCurrentPlan}
                 tone={isFree ? "success" : undefined}
               >
-                {isCurrentPlan ? "Current Plan" : buttonText}
+                {isCurrentPlan ? t("pricing.current_plan") : buttonText}
               </Button>
             </Box>
           </BlockStack>
@@ -529,7 +536,7 @@ const FAQItem = ({ question, answer, isOpen, onToggle }: {
 // Error boundary component to catch React errors
 function ErrorBoundary({ children }: { children: React.ReactNode }) {
   const [hasError, setHasError] = useState(false);
-  
+
   useEffect(() => {
     const handleError = (error: ErrorEvent) => {
       console.error('[BILLING] Caught error:', error);
@@ -539,11 +546,11 @@ function ErrorBoundary({ children }: { children: React.ReactNode }) {
         setTimeout(() => setHasError(false), 1000);
       }
     };
-    
+
     window.addEventListener('error', handleError);
     return () => window.removeEventListener('error', handleError);
   }, []);
-  
+
   if (hasError) {
     return (
       <Page>
@@ -553,11 +560,12 @@ function ErrorBoundary({ children }: { children: React.ReactNode }) {
       </Page>
     );
   }
-  
+
   return <>{children}</>;
 }
 
 export default function Pricing() {
+  const { t } = useTranslation();
   const { user, currentSubscription, success } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -566,7 +574,7 @@ export default function Pricing() {
   const didRedirectRef = useRef(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  
+
   // Set client flag to avoid hydration issues
   useEffect(() => {
     setIsClient(true);
@@ -576,20 +584,20 @@ export default function Pricing() {
   useEffect(() => {
     if (success) {
       setShowSuccessToast(true);
-      
+
       // Clean up URL parameters that might cause issues after payment
       try {
         const currentUrl = new URL(window.location.href);
-        const hasCleanupParams = currentUrl.searchParams.has('success') || 
-                                currentUrl.searchParams.has('processed') || 
-                                currentUrl.searchParams.has('billing_redirect');
-        
+        const hasCleanupParams = currentUrl.searchParams.has('success') ||
+          currentUrl.searchParams.has('processed') ||
+          currentUrl.searchParams.has('billing_redirect');
+
         if (hasCleanupParams) {
           // Remove parameters that are no longer needed
           currentUrl.searchParams.delete('processed');
           currentUrl.searchParams.delete('billing_redirect');
           // Keep success parameter for toast display
-          
+
           window.history.replaceState({}, '', currentUrl.toString());
         }
       } catch (error) {
@@ -694,14 +702,14 @@ export default function Pricing() {
     if (!currentSubscription) {
       return false;
     }
-    
+
     // Check against both the planName from subscription and mapped values
     const planMapping: { [key: string]: string[] } = {
       "starter_plan": ["starter_plan", "Starter Plan"],
       "pro_plan": ["pro_plan", "Pro Plan"],
       "enterprise_plan": ["enterprise_plan", "Enterprise Plan"]
     };
-    
+
     const possibleNames = planMapping[planKey] || [planKey];
     return possibleNames.includes(currentSubscription.planName);
   };
@@ -710,33 +718,33 @@ export default function Pricing() {
   const isUserOnPlan = (planKey: string) => {
     const planMapping: { [key: string]: string } = {
       "starter_plan": "starter",
-      "pro_plan": "pro", 
+      "pro_plan": "pro",
       "enterprise_plan": "enterprise"
     };
-    
+
     return user.plan === planMapping[planKey];
   };
 
   const faqData = [
     {
-      question: "How do optimization credits work?",
-      answer: "Each product optimization uses 1 credit. When you upgrade plans, new credits are added to your existing balance. Credits don't expire, so you can accumulate them over time. The Free plan includes 10 credits to get you started."
+      question: t("pricing.faq_q1"),
+      answer: t("pricing.faq_a1")
     },
     {
-      question: "Can I change plans anytime?",
-      answer: "Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately, and you'll be charged or credited accordingly."
+      question: t("pricing.faq_q2"),
+      answer: t("pricing.faq_a2")
     },
     {
-      question: "What happens to my data if I cancel?",
-      answer: "Your optimized content stays on your store permanently. You'll lose access to new optimizations but keep all previous work."
+      question: t("pricing.faq_q3"),
+      answer: t("pricing.faq_a3")
     },
     {
-      question: "How does billing work?",
-      answer: "Billing is handled entirely by Shopify for your security and convenience. You're billed monthly through Shopify's system on the date you subscribe. The Free plan is always free with no hidden costs. You can cancel or change plans at any time through your Shopify admin."
+      question: t("pricing.faq_q4"),
+      answer: t("pricing.faq_a4")
     },
     {
-      question: "Is the Free plan really free forever?",
-      answer: "Yes! The Free plan includes 5 optimization credits per month forever, with access to basic SEO features. No credit card required."
+      question: t("pricing.faq_q5"),
+      answer: t("pricing.faq_a5")
     }
   ];
 
@@ -753,10 +761,10 @@ export default function Pricing() {
           const cancelFormData = new FormData();
           cancelFormData.set("intent", "cancel");
           cancelFormData.set("subscriptionId", currentSubscription.id);
-          
+
           // Submit cancellation first
           submit(cancelFormData, { method: "post" });
-          
+
           // Wait a moment for cancellation to process, then update to free plan
           setTimeout(() => {
             const updateFormData = new FormData();
@@ -869,66 +877,67 @@ export default function Pricing() {
 
           {/* Pricing Cards */}
           <Box paddingBlockStart="800">
-            <Grid columns={{ xs: 1, sm: 1, md: 2, lg: 4 }} gap={{ xs: "400", sm: "500", md: "600", lg: "600" }}>
-              <Grid.Cell>
+            <Grid>
+              <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3 }}>
                 <PricingCard
-                  title="Free"
+                  title={t("index.plan_free")}
                   price="$0"
-                  period=""
-                  description="Perfect for trying out our SEO optimization"
+                  period={t("pricing.per_month")}
+                  description="Great for trying our AI optimizations"
                   features={planFeatures.map(f => f.free)}
-                  buttonText={user.plan === "free" && !currentSubscription ? "Current Plan" : currentSubscription ? "Downgrade to Free" : "Get Started Free"}
+                  buttonText={user.plan === "free" && !currentSubscription ? t("pricing.current_plan") : currentSubscription ? t("pricing.downgrade_to_free") : t("pricing.get_started_free")}
                   buttonVariant="secondary"
-                  isFree={true}
+                  isFree
                   isCurrentPlan={user.plan === "free" && !currentSubscription}
                   onSubscribe={() => handleSubscribe(FREE_PLAN)}
                   loading={isLoading}
+                  t={t}
                 />
               </Grid.Cell>
-
-              <Grid.Cell>
+              <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3 }}>
                 <PricingCard
-                  title="Starter"
-                  price="$9.99"
-                  period="per month"
-                  description="Perfect for small stores getting started with SEO"
+                  title={t("index.plan_starter")}
+                  price="$19"
+                  period={t("pricing.per_month")}
+                  description="Perfect for growing stores"
                   features={planFeatures.map(f => f.starter)}
-                  buttonText={isCurrentPlan(IMPORTED_STARTER_PLAN) || isUserOnPlan(IMPORTED_STARTER_PLAN) ? "Current Plan" : "Choose Plan"}
+                  buttonText={t("pricing.choose_plan")}
                   buttonVariant="secondary"
                   isCurrentPlan={isCurrentPlan(IMPORTED_STARTER_PLAN) || isUserOnPlan(IMPORTED_STARTER_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_STARTER_PLAN)}
                   loading={isLoading}
+                  t={t}
                 />
               </Grid.Cell>
-
-              <Grid.Cell>
+              <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3 }}>
                 <PricingCard
-                  title="Pro"
-                  price="$29.99"
-                  period="per month"
-                  description="For growing stores that need advanced SEO features"
+                  title={t("index.plan_pro")}
+                  price="$49"
+                  period={t("pricing.per_month")}
+                  description="Advanced tools for larger inventories"
                   features={planFeatures.map(f => f.pro)}
-                  buttonText={isCurrentPlan(IMPORTED_PRO_PLAN) || isUserOnPlan(IMPORTED_PRO_PLAN) ? "Current Plan" : "Choose Plan"}
+                  buttonText={t("pricing.choose_plan")}
                   buttonVariant="primary"
-                  isPopular={true}
+                  isPopular
                   isCurrentPlan={isCurrentPlan(IMPORTED_PRO_PLAN) || isUserOnPlan(IMPORTED_PRO_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_PRO_PLAN)}
                   loading={isLoading}
+                  t={t}
                 />
               </Grid.Cell>
-
-              <Grid.Cell>
+              <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3 }}>
                 <PricingCard
-                  title="Enterprise"
-                  price="$59.99"
-                  period="per month"
-                  description="For large stores with unlimited optimization needs"
+                  title={t("index.plan_enterprise")}
+                  price="$149"
+                  period={t("pricing.per_month")}
+                  description="Unlimited power for established brands"
                   features={planFeatures.map(f => f.enterprise)}
-                  buttonText={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN) || isUserOnPlan(IMPORTED_ENTERPRISE_PLAN) ? "Current Plan" : "Choose Plan"}
+                  buttonText={t("pricing.choose_plan")}
                   buttonVariant="secondary"
                   isCurrentPlan={isCurrentPlan(IMPORTED_ENTERPRISE_PLAN) || isUserOnPlan(IMPORTED_ENTERPRISE_PLAN)}
                   onSubscribe={() => handleSubscribe(IMPORTED_ENTERPRISE_PLAN)}
                   loading={isLoading}
+                  t={t}
                 />
               </Grid.Cell>
             </Grid>

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, useFetcher, Link } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import {
   Page,
   Card,
@@ -21,11 +22,12 @@ import {
   List,
   Divider,
 } from "@shopify/polaris";
-import { 
-  QuestionCircleIcon, 
+import {
+  QuestionCircleIcon,
   EmailIcon
 } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
+import i18nextServer from "../i18next.server";
 import { authenticate } from "../shopify.server";
 import { ensureUserExists } from "../utils/db.server";
 import { sendContactFormEmail } from "../utils/email.server";
@@ -52,6 +54,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const t = await i18nextServer.getFixedT(request);
   const { session } = await authenticate.admin(request);
 
   if (!session || !session.shop) {
@@ -71,9 +74,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Validate required fields
     if (!name || !email || !subject || !message || !category) {
-      return json({ 
+      return json({
         error: "Please fill in all required fields",
-        success: false 
+        success: false
       }, { status: 400 });
     }
 
@@ -92,15 +95,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const emailSent = await sendContactFormEmail(emailData);
 
     if (!emailSent) {
-      return json({ 
+      return json({
         error: "Failed to send your message. Please try again later.",
-        success: false 
+        success: false
       }, { status: 500 });
     }
 
-    return json({ 
-      success: true, 
-      message: "Your support request has been submitted successfully! We'll get back to you within 24 hours." 
+    return json({
+      success: true,
+      message: t("help.toast_contact_success")
     });
   }
 
@@ -108,22 +111,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 
-const contactCategories = [
-  { label: "General Question", value: "general" },
-  { label: "Technical Issue", value: "technical" },
-  { label: "Billing Support", value: "billing" },
-  { label: "Feature Request", value: "feature" },
-  { label: "Bug Report", value: "bug" },
-  { label: "Account Issue", value: "account" },
-];
-
-const priorityOptions = [
-  { label: "Low - General inquiry", value: "low" },
-  { label: "Medium - Standard support", value: "medium" },
-  { label: "High - Urgent issue", value: "high" },
-];
-
 export default function Help() {
+  const { t } = useTranslation();
+  const contactCategories = [
+    { label: t("help.cat_general"), value: "general" },
+    { label: t("help.cat_technical"), value: "technical" },
+    { label: t("help.cat_billing"), value: "billing" },
+    { label: t("help.cat_feature"), value: "feature" },
+    { label: t("help.cat_bug"), value: "bug" },
+    { label: t("help.cat_account"), value: "account" },
+  ];
+
+  const priorityOptions = [
+    { label: t("help.pri_low"), value: "low" },
+    { label: t("help.pri_medium"), value: "medium" },
+    { label: t("help.pri_high"), value: "high" },
+  ];
   const { user } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const fetcher = useFetcher();
@@ -177,7 +180,7 @@ export default function Help() {
     if (data && typeof data === 'object' && 'message' in data && typeof data.message === 'string') {
       return data.message;
     }
-    return "Your message has been sent successfully!";
+    return t("help.toast_contact_success");
   };
 
   // Helper function to safely check success
@@ -210,8 +213,8 @@ export default function Help() {
   }, [fetcher.data]);
 
   const isSuccessState = checkSuccess(actionData) || checkSuccess(fetcher.data);
-  const hasError = (actionData && typeof actionData === 'object' && 'error' in actionData) || 
-                  (fetcher.data && typeof fetcher.data === 'object' && 'error' in fetcher.data);
+  const hasError = (actionData && typeof actionData === 'object' && 'error' in actionData) ||
+    (fetcher.data && typeof fetcher.data === 'object' && 'error' in fetcher.data);
 
   const toastMarkup = showToast ? (
     <Toast
@@ -224,7 +227,7 @@ export default function Help() {
   return (
     <Frame>
       <Page>
-        <TitleBar title="Help & Support" />
+        <TitleBar title={t("help.title")} />
 
         {toastMarkup}
 
@@ -238,26 +241,24 @@ export default function Help() {
         >
           <Box padding="800">
             <BlockStack gap="500" align="center">
-                             <div
-                 style={{
-                   padding: '16px',
-                   borderRadius: '50%',
-                   background: 'rgba(255, 255, 255, 0.2)',
-                   backdropFilter: 'blur(10px)',
-                   display: 'flex',
-                   alignItems: 'center',
-                   justifyContent: 'center'
-                 }}
-               >
-                 <Icon source={QuestionCircleIcon} tone="base" />
-               </div>
+              <div
+                style={{
+                  padding: '16px',
+                  borderRadius: '50%',
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  backdropFilter: 'blur(10px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Icon source={QuestionCircleIcon} tone="base" />
+              </div>
               <Text variant="heading2xl" as="h1" alignment="center" tone="text-inverse">
-                How can we help you today?
+                {t("help.hero_title")}
               </Text>
               <Text variant="bodyLg" alignment="center" tone="text-inverse" as="p">
-                Get instant answers from our knowledge base or reach out to our support team.
-                <br />
-                We're here to help you succeed with AI-powered SEO optimization.
+                {t("help.hero_subtitle")}
               </Text>
             </BlockStack>
           </Box>
@@ -280,10 +281,10 @@ export default function Help() {
                     </Box>
                     <BlockStack gap="200">
                       <Text variant="headingMd" as="h3">
-                        Email Support
+                        {t("help.email_support_title")}
                       </Text>
                       <Text variant="bodyMd" tone="subdued" as="p">
-                        Get help from our support team using the contact form below
+                        {t("help.email_support_desc")}
                       </Text>
                     </BlockStack>
                   </InlineStack>
@@ -298,14 +299,14 @@ export default function Help() {
                 <BlockStack gap="600">
                   <BlockStack gap="300">
                     <Text variant="headingLg" as="h2">
-                      Contact Support
+                      {t("help.contact_title")}
                     </Text>
                     <Text variant="bodyMd" tone="subdued" as="p">
-                      Can't find what you're looking for? Send us a message and we'll get back to you within 24 hours.
+                      {t("help.contact_subtitle")}
                     </Text>
                   </BlockStack>
 
-                 
+
                   {Boolean(hasError) && (
                     <Banner title="Error" tone="critical">
                       <Text as="p">
@@ -317,19 +318,19 @@ export default function Help() {
                   <FormLayout>
                     <FormLayout.Group>
                       <TextField
-                        label="Name"
+                        label={t("help.form_name")}
                         value={contactForm.name}
                         onChange={(value) => handleContactFormChange("name", value)}
-                        placeholder="Enter your full name"
+                        placeholder={t("help.form_name_placeholder")}
                         requiredIndicator
                         autoComplete="name"
                       />
                       <TextField
-                        label="Email"
+                        label={t("help.form_email")}
                         type="email"
                         value={contactForm.email}
                         onChange={(value) => handleContactFormChange("email", value)}
-                        placeholder="Enter your email address"
+                        placeholder={t("help.form_email_placeholder")}
                         requiredIndicator
                         autoComplete="email"
                       />
@@ -337,13 +338,13 @@ export default function Help() {
 
                     <FormLayout.Group>
                       <Select
-                        label="Category"
+                        label={t("help.form_category")}
                         options={contactCategories}
                         value={contactForm.category}
                         onChange={(value) => handleContactFormChange("category", value)}
                       />
                       <Select
-                        label="Priority"
+                        label={t("help.form_priority")}
                         options={priorityOptions}
                         value={contactForm.priority}
                         onChange={(value) => handleContactFormChange("priority", value)}
@@ -351,35 +352,35 @@ export default function Help() {
                     </FormLayout.Group>
 
                     <TextField
-                      label="Subject"
+                      label={t("help.form_subject")}
                       value={contactForm.subject}
                       onChange={(value) => handleContactFormChange("subject", value)}
-                      placeholder="Brief description of your issue"
+                      placeholder={t("help.form_subject_placeholder")}
                       requiredIndicator
                       autoComplete="off"
                     />
 
                     <TextField
-                      label="Message"
+                      label={t("help.form_message")}
                       value={contactForm.message}
                       onChange={(value) => handleContactFormChange("message", value)}
-                      placeholder="Please describe your question or issue in detail..."
+                      placeholder={t("help.form_message_placeholder")}
                       multiline={6}
                       requiredIndicator
                       autoComplete="off"
                     />
 
-                                                              <InlineStack align="end">
-                        <Button
-                          variant="primary"
-                          onClick={handleSubmit}
-                          loading={isSubmitting}
-                          disabled={!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message}
-                          tone={isSuccessState ? "success" : undefined}
-                        >
-                          {isSuccessState ? "✓ Message Sent!" : "Send Message"}
-                        </Button>
-                      </InlineStack>
+                    <InlineStack align="end">
+                      <Button
+                        variant="primary"
+                        onClick={handleSubmit}
+                        loading={isSubmitting}
+                        disabled={!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message}
+                        tone={isSuccessState ? "success" : undefined}
+                      >
+                        {isSuccessState ? t("help.form_sent") : t("help.form_send")}
+                      </Button>
+                    </InlineStack>
                   </FormLayout>
                 </BlockStack>
               </Box>
@@ -391,14 +392,14 @@ export default function Help() {
                 <Box padding="600">
                   <BlockStack gap="500">
                     <Text variant="headingMd" as="h3">
-                      Best Practices
+                      {t("help.best_practices_title")}
                     </Text>
                     <List type="bullet">
-                      <List.Item>Optimize 5-10 products at a time for best performance</List.Item>
-                      <List.Item>Add relevant keywords to improve AI optimization accuracy</List.Item>
-                      <List.Item>Use special instructions to maintain brand consistency</List.Item>
-                      <List.Item>Review optimized content before publishing changes</List.Item>
-                      <List.Item>Monitor your SEO performance after optimization</List.Item>
+                      <List.Item>{t("help.bp_item1")}</List.Item>
+                      <List.Item>{t("help.bp_item2")}</List.Item>
+                      <List.Item>{t("help.bp_item3")}</List.Item>
+                      <List.Item>{t("help.bp_item4")}</List.Item>
+                      <List.Item>{t("help.bp_item5")}</List.Item>
                     </List>
                   </BlockStack>
                 </Box>
@@ -408,27 +409,27 @@ export default function Help() {
                 <Box padding="600">
                   <BlockStack gap="500">
                     <Text variant="headingMd" as="h3">
-                      Quick Links
+                      {t("help.quick_links_title")}
                     </Text>
                     <BlockStack gap="300">
                       <Link to="/app/products" style={{ textDecoration: 'none' }}>
                         <Button variant="plain" fullWidth textAlign="start">
-                          🚀 Optimize Products
+                          🚀 {t("help.ql_optimize")}
                         </Button>
                       </Link>
                       <Link to="/app/pricing" style={{ textDecoration: 'none' }}>
                         <Button variant="plain" fullWidth textAlign="start">
-                          💳 View Pricing Plans
+                          💳 {t("help.ql_pricing")}
                         </Button>
                       </Link>
                       <Link to="/app" style={{ textDecoration: 'none' }}>
                         <Button variant="plain" fullWidth textAlign="start">
-                          📊 Account Dashboard
+                          📊 {t("help.ql_dashboard")}
                         </Button>
                       </Link>
                       <Divider />
                       <Text variant="bodySm" tone="subdued" as="p">
-                        Need immediate help? Use the contact form above to reach our support team.
+                        {t("help.ql_footer")}
                       </Text>
                     </BlockStack>
                   </BlockStack>

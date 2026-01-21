@@ -8,19 +8,28 @@ import {
 } from "@remix-run/react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { useChangeLanguage } from "remix-i18next/react";
+import { useTranslation } from "react-i18next";
+import i18nextServer from "./i18next.server";
 
-// Loader to provide the API key to the frontend
+// Loader to provide the API key and locale to the frontend
 export async function loader({ request }: LoaderFunctionArgs) {
+  const locale = await i18nextServer.getLocale(request);
   return json({
     apiKey: process.env.SHOPIFY_API_KEY || "",
+    locale,
   });
 }
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
-  
+  const { apiKey, locale } = useLoaderData<typeof loader>();
+  const { i18n } = useTranslation();
+
+  // This hook will change the i18next instance language to the one in the locale variable
+  useChangeLanguage(locale);
+
   return (
-    <html>
+    <html lang={i18n.language}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -30,7 +39,7 @@ export default function App() {
         <Meta />
         <Links />
         {/* Modern App Bridge - CDN script that auto-updates */}
-        <script 
+        <script
           src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
           onError={(e) => {
             console.error('Failed to load App Bridge script:', e);

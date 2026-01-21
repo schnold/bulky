@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams, useFetcher } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import {
   Page,
   Layout,
@@ -30,6 +31,7 @@ import {
 import { MagicIcon, CheckIcon, CreditCardIcon, ViewIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import i18nextServer from "../i18next.server";
 import { ClientOnly } from "../components/ClientOnly";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import prisma from "../db.server";
@@ -129,7 +131,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       searchParams: Object.fromEntries(requestUrl.searchParams.entries()),
       isDataRequest: requestUrl.searchParams.has('_data')
     });
-    
+
     console.log(`🔍 Products loader - Request headers:`, {
       'user-agent': request.headers.get('user-agent'),
       'cookie': request.headers.get('cookie') ? 'SET' : 'NOT SET',
@@ -145,7 +147,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       SHOPIFY_API_SECRET: process.env.SHOPIFY_API_SECRET ? 'SET' : 'NOT SET',
       SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL ? 'SET' : 'NOT SET',
     });
-    
+
     if (!process.env.SHOPIFY_API_KEY || !process.env.SHOPIFY_API_SECRET) {
       console.error("❌ Products loader - Missing required Shopify environment variables");
       throw new Error("Missing required Shopify environment variables");
@@ -162,7 +164,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     console.log(`🔍 Products loader - About to authenticate admin request...`);
     let admin, session;
-    
+
     try {
       const authResult = await authenticate.admin(request);
       admin = authResult.admin;
@@ -218,6 +220,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const direction = url.searchParams.get("direction") || "next";
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const productsPerPage = parseInt(url.searchParams.get("productsPerPage") || "15", 10);
+    const sort = url.searchParams.get("sort") || "created_at_desc";
+
+    let sortKey = "CREATED_AT";
+    let reverse = true;
+
+    switch (sort) {
+      case "created_at_asc":
+        sortKey = "CREATED_AT";
+        reverse = false;
+        break;
+      case "title_asc":
+        sortKey = "TITLE";
+        reverse = false;
+        break;
+      case "title_desc":
+        sortKey = "TITLE";
+        reverse = true;
+        break;
+      case "created_at_desc":
+      default:
+        sortKey = "CREATED_AT";
+        reverse = true;
+        break;
+    }
 
     // Build GraphQL query filters
     let queryString = "";
@@ -242,8 +268,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const response = await admin.graphql(
       `#graphql
-        query getProducts($first: Int, $last: Int, $after: String, $before: String, $query: String) {
-          products(first: $first, last: $last, after: $after, before: $before, query: $query) {
+        query getProducts($first: Int, $last: Int, $after: String, $before: String, $query: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
+          products(first: $first, last: $last, after: $after, before: $before, query: $query, sortKey: $sortKey, reverse: $reverse) {
             edges {
               node {
                 id
@@ -277,6 +303,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           after,
           before,
           query: queryString,
+          sortKey,
+          reverse,
         },
       }
     );
@@ -287,15 +315,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries())
       });
-      
+
       const errorText = await response.text();
       console.error(`❌ GraphQL error response:`, errorText);
-      
+
       throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
     }
 
     const responseJson = await response.json() as any;
-    
+
     if (responseJson.errors) {
       console.error(`❌ GraphQL errors:`, responseJson.errors);
       throw new Error(`GraphQL errors: ${JSON.stringify(responseJson.errors)}`);
@@ -313,7 +341,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const { getOptimizationStatusForProducts } = await import("../models/product-optimization.server");
         const productIds = products.map(p => p.id);
         const optimizationStatusMap = await getOptimizationStatusForProducts(productIds, session.shop);
-        
+
         productsWithOptimizationStatus = products.map(product => {
           const status = optimizationStatusMap.get(product.id);
           return {
@@ -322,7 +350,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             optimizedAt: status?.optimizedAt?.toISOString(),
           };
         });
-        
+
         console.log(`✅ Products loader - Added optimization status for ${productsWithOptimizationStatus.length} products`);
       } catch (error) {
         console.error("❌ Failed to fetch optimization status:", error);
@@ -347,10 +375,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } catch (error) {
     console.error("❌ Products loader error:", error);
     console.error("❌ Error stack:", error instanceof Error ? error.stack : "No stack trace");
-    
+
     // Return a proper error response instead of throwing
     return json(
-      { 
+      {
         error: "Failed to load products",
         details: error instanceof Error ? error.message : "Unknown error"
       },
@@ -392,6 +420,7 @@ function SparkleButton({
 }
 
 export default function Products() {
+  const { t } = useTranslation();
   const loaderData = useLoaderData<typeof loader>();
 
   // Set up hooks unconditionally before any early return
@@ -402,6 +431,7 @@ export default function Products() {
   // Default initial state values (will be updated once loaderData is validated)
   const [selectedProductsPerPage, setSelectedProductsPerPage] = useState("15");
   const [searchValue, setSearchValue] = useState("");
+  const [sortValue, setSortValue] = useState("created_at_desc");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [productTypeFilter, setProductTypeFilter] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
@@ -460,12 +490,14 @@ export default function Products() {
     const initialProductType = searchParams.get("productType") || "";
     const initialVendor = searchParams.get("vendor") || "";
     const initialPerPage = searchParams.get("productsPerPage") || (ld?.productsPerPage?.toString() ?? "15");
+    const initialSort = searchParams.get("sort") || "created_at_desc";
 
     setSearchValue(initialQuery);
     setStatusFilter(initialStatus ? [initialStatus] : []);
     setProductTypeFilter(initialProductType);
     setVendorFilter(initialVendor);
     setSelectedProductsPerPage(initialPerPage);
+    setSortValue(initialSort);
     setIsInitialized(true);
   }, [loaderData, searchParams, isInitialized]);
 
@@ -562,6 +594,24 @@ export default function Products() {
   const handleVendorFilterChange = useCallback((value: string) => {
     setVendorFilter(value);
   }, []);
+
+  const handleSortChange = useCallback((value: string) => {
+    setSortValue(value);
+    setSearchParams(prev => {
+      const newParams = new URLSearchParams(prev);
+      newParams.set("sort", value);
+      newParams.delete("cursor"); // Reset pagination
+      newParams.delete("page");
+      return newParams;
+    }, { preventScrollReset: true });
+  }, [setSearchParams]);
+
+  const sortOptions = [
+    { label: t("products.sort_newest"), value: "created_at_desc" },
+    { label: t("products.sort_oldest"), value: "created_at_asc" },
+    { label: t("products.sort_az"), value: "title_asc" },
+    { label: t("products.sort_za"), value: "title_desc" },
+  ];
 
   const handleProductsPerPageChange = useCallback((value: string) => {
     setSelectedProductsPerPage(value);
@@ -670,7 +720,7 @@ export default function Products() {
       failed: 0
     });
     setSelectedItems([]);
-    
+
     // Show cancellation message
     setToastMessage("Optimization cancelled");
     setToastError(false);
@@ -855,7 +905,7 @@ export default function Products() {
           ...advancedContext,
           specialInstructions: specialInstructions || undefined
         };
-        
+
         optimizeFetcher.submit(
           {
             intent: "optimize",
@@ -964,18 +1014,18 @@ export default function Products() {
     if (fetcherState === "idle" && bulkOptimizationProgress.isActive && currentOptimizingProduct) {
       const fetcherError = (optimizeFetcher as any)?.data?.error;
       const results = (fetcherData as any)?.results;
-      
+
       // Check for specific error conditions including network errors
       const hasNetworkError = optimizeFetcher.state === "idle" && !fetcherData;
       const hasApiError = fetcherError || (!results && fetcherData && typeof fetcherData === 'object' && 'error' in fetcherData);
-      
+
       if (hasNetworkError || hasApiError) {
         console.warn(`⚠️ Optimization failed for product: ${currentOptimizingProduct}`, {
           hasNetworkError,
           fetcherError,
           fetcherData
         });
-        
+
         // Handle the failed product
         setFailedProducts(prev => new Set([...prev, currentOptimizingProduct]));
         setBulkOptimizationProgress(prev => ({
@@ -992,7 +1042,7 @@ export default function Products() {
         // Show error toast if this was the last product
         if (optimizationQueue.length === 0) {
           let errorMessage = 'Optimization failed. Please try again.';
-          
+
           if (hasNetworkError) {
             errorMessage = 'Network timeout occurred. The AI service may be busy. Please try again in a moment.';
           } else if (fetcherError?.includes('timeout') || fetcherError?.includes('504')) {
@@ -1000,7 +1050,7 @@ export default function Products() {
           } else if (fetcherError?.includes('credits') || fetcherError?.includes('insufficient')) {
             errorMessage = 'Insufficient credits. Please check your plan or wait for credits to reset.';
           }
-          
+
           setToastMessage(errorMessage);
           setToastError(true);
           setShowToast(true);
@@ -1022,7 +1072,7 @@ export default function Products() {
         }
         return; // Exit early for error case
       }
-      
+
       // Handle successful case (existing logic)
       if (!results) {
         return; // Still processing or no data yet
@@ -1048,7 +1098,7 @@ export default function Products() {
             return newSet;
           });
           setCurrentOptimizingProduct(null);
-          
+
           // Show timeout error with helpful message
           setToastMessage(`Optimization timed out. Complex products may take longer - try reducing the number of products being optimized simultaneously.`);
           setToastError(true);
@@ -1118,7 +1168,7 @@ export default function Products() {
       label: "Status",
       filter: (
         <ChoiceList
-          title="Status"
+          title={t("products.status_filter")}
           titleHidden
           choices={[
             { label: "Active", value: "active" },
@@ -1137,11 +1187,11 @@ export default function Products() {
       label: "Product Type",
       filter: (
         <TextField
-          label="Product Type"
+          label={t("products.type_filter")}
           labelHidden
           value={productTypeFilter}
           onChange={handleProductTypeFilterChange}
-          placeholder="Enter product type"
+          placeholder={t("products.type_filter")}
           autoComplete="off"
         />
       ),
@@ -1152,11 +1202,11 @@ export default function Products() {
       label: "Vendor",
       filter: (
         <TextField
-          label="Vendor"
+          label={t("products.vendor_filter")}
           labelHidden
           value={vendorFilter}
           onChange={handleVendorFilterChange}
-          placeholder="Enter vendor name"
+          placeholder={t("products.vendor_filter")}
           autoComplete="off"
         />
       ),
@@ -1251,993 +1301,1009 @@ export default function Products() {
       <ErrorBoundary>
         <Frame>
           <Page>
-            <TitleBar title="Products" />
+            <TitleBar title={t("products.title")} />
 
-        {/* Error Banner (rendered via content, not early-return) */}
-        {hasError && (
-          <Card>
-            <Box padding="600">
-              <Text variant="headingMd" as="h2" tone="critical">
-                Error Loading Products
-              </Text>
-              <Text variant="bodyMd" tone="subdued" as="p">
-                {(loaderData as any)?.details}
-              </Text>
-            </Box>
-          </Card>
-        )}
-
-        {/* Loading State (no early return, keeps hooks order consistent) */}
-        {isLoading && !hasError && (
-          <Card>
-            <Box padding="600">
-              <Text variant="headingMd" as="h2">
-                Loading Products...
-              </Text>
-            </Box>
-          </Card>
-        )}
-
-        {/* Action Bar */}
-        <Card>
-          <Box padding="500">
-            <InlineStack gap="400" align="space-between">
-              <BlockStack gap="100">
-                <Text variant="headingLg" as="h2">
-                  AI Product Optimization
-                </Text>
-                <Text variant="bodyMd" tone="subdued" as="p">
-                  Enhance your products with 2026 SEO best practices using AI
-                </Text>
-              </BlockStack>
-
-              <BlockStack gap="200" align="end">
-                <InlineStack gap="300" align="center">
-                  <Button
-                    variant="tertiary"
-                    size="slim"
-                    onClick={() => setShowSpecialInstructionsModal(true)}
-                  >
-                    Special Instructions
-                  </Button>
-                  
-                  {/* Enhanced Credits and Plan Display */}
-                  <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "8px 12px",
-                    backgroundColor: "var(--p-color-bg-surface-secondary)",
-                    borderRadius: "8px",
-                    border: "1px solid var(--p-color-border)",
-                  }}>
-                    <Icon source={CreditCardIcon} tone="base" />
-                    <div style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-end",
-                      gap: "2px"
-                    }}>
-                      <Text variant="bodyMd" fontWeight="semibold" as="span">
-                        {user.credits} credits
-                      </Text>
-                      {subscriptionPlan && (
-                        <Text variant="bodySm" tone="subdued" as="span">
-                          {subscriptionPlan} 
-                        </Text>
-                      )}
-                    </div>
-                  </div>
-                </InlineStack>
-                <Text variant="bodySm" tone="subdued" as="p">
-                  Select products using checkboxes to enable bulk optimization
-                </Text>
-                {selectedItems.length > 10 && (
-                  <Text variant="bodySm" tone="caution" as="p">
-                    💡 Tip: For best results, optimize 5-10 products at a time to avoid timeouts
+            {/* Error Banner (rendered via content, not early-return) */}
+            {hasError && (
+              <Card>
+                <Box padding="600">
+                  <Text variant="headingMd" as="h2" tone="critical">
+                    Error Loading Products
                   </Text>
-                )}
-              </BlockStack>
-            </InlineStack>
-          </Box>
-        </Card>
+                  <Text variant="bodyMd" tone="subdued" as="p">
+                    {(loaderData as any)?.details}
+                  </Text>
+                </Box>
+              </Card>
+            )}
 
-        {/* Bulk Publish Ready Banner */}
-        {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length > 0 && !bulkOptimizationProgress.isActive && (
-          <Card>
-            <Box padding="400">
-              <BlockStack gap="300">
+            {/* Loading State (no early return, keeps hooks order consistent) */}
+            {isLoading && !hasError && (
+              <Card>
+                <Box padding="600">
+                  <Text variant="headingMd" as="h2">
+                    Loading Products...
+                  </Text>
+                </Box>
+              </Card>
+            )}
+
+            {/* Action Bar */}
+            <Card>
+              <Box padding="500">
                 <InlineStack gap="400" align="space-between">
                   <BlockStack gap="100">
-                    <InlineStack gap="200" align="center">
-                      <div style={{
-                        width: "12px",
-                        height: "12px",
-                        borderRadius: "50%",
-                        backgroundColor: "var(--p-color-bg-success)"
-                      }} />
-                      <Text variant="headingMd" as="h3">
-                        {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length} Optimized Product{Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length !== 1 ? 's' : ''} Ready to Publish
-                      </Text>
-                    </InlineStack>
+                    <Text variant="headingLg" as="h2">
+                      {t("products.title")}
+                    </Text>
                     <Text variant="bodyMd" tone="subdued" as="p">
-                      Review changes below and publish all at once, or manage individually
+                      {t("index.welcome_description")}
                     </Text>
                   </BlockStack>
 
-                  <InlineStack gap="200">
-                    <Button
-                      variant="primary"
-                      onClick={handleBulkPublish}
-                      loading={publishFetcher.state === "submitting"}
-                      icon={CheckIcon}
-                    >
-                      {`Publish All (${Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length})`}
-                    </Button>
-                    <Button
-                      variant="tertiary"
-                      tone="critical"
-                      onClick={handleDiscardAll}
-                    >
-                      Discard All
-                    </Button>
-                  </InlineStack>
-                </InlineStack>
-
-                {/* Quick summary of optimized products */}
-                <div style={{
-                  display: "flex",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                  paddingTop: "8px",
-                  borderTop: "1px solid var(--p-color-border)"
-                }}>
-                  {Object.keys(optimizedProducts)
-                    .filter(id => !optimizedProducts[id].isPublished)
-                    .slice(0, 5)
-                    .map(productId => {
-                      const product = products.find(p => p.id === productId);
-                      return (
-                        <Badge key={productId} tone="success" size="small">
-                          {product?.title || optimizedProducts[productId].originalData.title}
-                        </Badge>
-                      );
-                    })}
-                  {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length > 5 && (
-                    <Badge tone="info" size="small">
-                      {`+${Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length - 5} more`}
-                    </Badge>
-                  )}
-                </div>
-              </BlockStack>
-            </Box>
-          </Card>
-        )}
-
-        {/* Bulk Optimization Progress Bar */}
-        {bulkOptimizationProgress.isActive && (
-          <Card>
-            <Box padding="400">
-              <BlockStack gap="400">
-                <InlineStack gap="300" align="space-between">
-                  <BlockStack gap="100">
-                    <Text variant="headingMd" as="h3">
-                      🤖 AI Optimization in Progress
-                    </Text>
-                    <Text variant="bodyMd" tone="subdued" as="p">
-                      {bulkOptimizationProgress.current === bulkOptimizationProgress.total
-                        ? `All ${bulkOptimizationProgress.total} products processed!`
-                        : `Processing ${bulkOptimizationProgress.current} of ${bulkOptimizationProgress.total} products`
-                      }
-                    </Text>
-                  </BlockStack>
-                  <Text variant="bodyMd" fontWeight="semibold" as="span">
-                    {bulkOptimizationProgress.total > 0
-                      ? Math.round((bulkOptimizationProgress.current / bulkOptimizationProgress.total) * 100)
-                      : 0
-                    }%
-                  </Text>
-                </InlineStack>
-
-                <div style={{
-                  width: "100%",
-                  height: "8px",
-                  backgroundColor: "var(--p-color-bg-surface-secondary)",
-                  borderRadius: "4px",
-                  overflow: "hidden"
-                }}>
-                  <div style={{
-                    width: `${bulkOptimizationProgress.total > 0
-                      ? (bulkOptimizationProgress.current / bulkOptimizationProgress.total) * 100
-                      : 0
-                      }%`,
-                    height: "100%",
-                    backgroundColor: bulkOptimizationProgress.current === bulkOptimizationProgress.total
-                      ? "var(--p-color-bg-success)"
-                      : "var(--p-color-bg-info)",
-                    transition: "width 0.3s ease, background-color 0.3s ease"
-                  }} />
-                </div>
-
-                <InlineStack gap="400" align="space-between">
-                  <InlineStack gap="200" align="center">
-                    {bulkOptimizationProgress.current < bulkOptimizationProgress.total && (
-                      <Spinner size="small" />
-                    )}
-                    <Text variant="bodySm" tone="subdued" as="span">
-                      {bulkOptimizationProgress.current === bulkOptimizationProgress.total
-                        ? <strong>✅ {bulkOptimizationProgress.currentProductTitle}</strong>
-                        : <>Currently optimizing: <strong>{bulkOptimizationProgress.currentProductTitle}</strong></>
-                      }
-                    </Text>
-                  </InlineStack>
-
-                  {/* Queue Status and Cancel Button */}
-                  <InlineStack gap="300">
-                    {bulkOptimizationProgress.completed > 0 && (
-                      <InlineStack gap="100" align="center">
-                        <div style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "50%",
-                          backgroundColor: "var(--p-color-bg-success)"
-                        }} />
-                        <Text variant="bodySm" tone="success" as="span">
-                          {bulkOptimizationProgress.completed} completed
-                        </Text>
-                      </InlineStack>
-                    )}
-                    {bulkOptimizationProgress.failed > 0 && (
-                      <InlineStack gap="100" align="center">
-                        <div style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "50%",
-                          backgroundColor: "var(--p-color-bg-critical)"
-                        }} />
-                        <Text variant="bodySm" tone="critical" as="span">
-                          {bulkOptimizationProgress.failed} failed
-                        </Text>
-                      </InlineStack>
-                    )}
-                    {optimizationQueue.length > 0 && (
-                      <InlineStack gap="100" align="center">
-                        <div style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "50%",
-                          backgroundColor: "var(--p-color-bg-info)"
-                        }} />
-                        <Text variant="bodySm" tone="subdued" as="span">
-                          {optimizationQueue.length} in queue
-                        </Text>
-                      </InlineStack>
-                    )}
-                    
-                    {/* Cancel Button */}
-                    {bulkOptimizationProgress.current < bulkOptimizationProgress.total && (
+                  <BlockStack gap="200" align="end">
+                    <InlineStack gap="300" align="center">
                       <Button
                         variant="tertiary"
-                        tone="critical"
                         size="slim"
-                        onClick={handleCancelOptimization}
+                        onClick={() => setShowSpecialInstructionsModal(true)}
                       >
-                        Cancel
+                        {t("products.special_instructions_title")}
                       </Button>
-                    )}
-                  </InlineStack>
-                </InlineStack>
-              </BlockStack>
-            </Box>
-          </Card>
-        )}
 
-        <Layout>
-          <Layout.Section>
-            {/* Filters Section */}
-            <Card>
-              <Filters
-                queryValue={searchValue}
-                queryPlaceholder="Search products"
-                onQueryChange={handleSearchChange}
-                onQueryClear={() => setSearchValue("")}
-                onClearAll={handleFiltersClearAll}
-                filters={filters}
-                appliedFilters={appliedFilters}
-              />
-            </Card>
-
-            {/* Selection Controls */}
-            {!isLoading && (
-            <Card>
-              <Box padding="400">
-                <InlineStack gap="400" align="space-between">
-                  <InlineStack gap="300">
-                    <Checkbox
-                      label="Select all products"
-                      checked={selectedItems.length === products.length && products.length > 0}
-                      onChange={(checked) => {
-                        if (checked) {
-                          setSelectedItems(products.map(p => p.id));
-                        } else {
-                          setSelectedItems([]);
-                        }
-                      }}
-                    />
-                    {selectedItems.length > 0 && (
-                      <InlineStack gap="200" align="start">
-                        <Icon source={CheckIcon} tone="subdued" />
-                        <Text variant="bodyMd" fontWeight="semibold" as="span">
-                          {selectedItems.length} of {products.length} products selected
-                        </Text>
-                      </InlineStack>
-                    )}
-                  </InlineStack>
-
-                  {selectedItems.length > 0 && (
-                    <InlineStack gap="200">
-                      <SparkleButton
-                        onClick={handleOptimizeSelected}
-                        disabled={fetcherState === "submitting"}
-                        variant="primary"
-                      >
-                        {`Quick Optimize ${selectedItems.length}`}
-                      </SparkleButton>
-                      <SparkleButton
-                        onClick={() => handleAdvancedOptimize(selectedItems)}
-                        disabled={fetcherState === "submitting"}
-                        variant="secondary"
-                      >
-                        {`Advanced Optimize ${selectedItems.length}`}
-                      </SparkleButton>
-                      <Button
-                        size="slim"
-                        onClick={() => setSelectedItems([])}
-                      >
-                        Clear Selection
-                      </Button>
+                      {/* Enhanced Credits and Plan Display */}
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "8px 12px",
+                        backgroundColor: "var(--p-color-bg-surface-secondary)",
+                        borderRadius: "8px",
+                        border: "1px solid var(--p-color-border)",
+                      }}>
+                        <Icon source={CreditCardIcon} tone="base" />
+                        <div style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-end",
+                          gap: "2px"
+                        }}>
+                          <Text variant="bodyMd" fontWeight="semibold" as="span">
+                            {t("products.credits_balance", { count: user.credits })}
+                          </Text>
+                          {subscriptionPlan && (
+                            <Text variant="bodySm" tone="subdued" as="span">
+                              {subscriptionPlan}
+                            </Text>
+                          )}
+                        </div>
+                      </div>
                     </InlineStack>
-                  )}
+                    <Text variant="bodySm" tone="subdued" as="p">
+                      {t("products.selection_summary", { count: selectedItems.length, total: products.length })}
+                    </Text>
+                    {selectedItems.length > 10 && (
+                      <Text variant="bodySm" tone="caution" as="p">
+                        {t("products.optimization_tip")}
+                      </Text>
+                    )}
+                  </BlockStack>
                 </InlineStack>
               </Box>
             </Card>
-            )}
 
-            {/* Products List */}
-            {!isLoading && (
-            <Card>
-              {products.length === 0 ? (
-                <Box padding="800">
-                  <BlockStack gap="400" align="center">
-                    <Text variant="headingLg" as="h3">No products found</Text>
-                    <Text variant="bodyMd" tone="subdued" as="p">
-                      Try adjusting your search or filter criteria
-                    </Text>
+            {/* Bulk Publish Ready Banner */}
+            {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length > 0 && !bulkOptimizationProgress.isActive && (
+              <Card>
+                <Box padding="400">
+                  <BlockStack gap="300">
+                    <InlineStack gap="400" align="space-between">
+                      <BlockStack gap="100">
+                        <InlineStack gap="200" align="center">
+                          <div style={{
+                            width: "12px",
+                            height: "12px",
+                            borderRadius: "50%",
+                            backgroundColor: "var(--p-color-bg-success)"
+                          }} />
+                          <Text variant="headingMd" as="h3">
+                            {t("products.publish_all", { count: Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length })}
+                          </Text>
+                        </InlineStack>
+                        <Text variant="bodyMd" tone="subdued" as="p">
+                          Review changes below and publish all at once, or manage individually
+                        </Text>
+                      </BlockStack>
+
+                      <InlineStack gap="200">
+                        <Button
+                          variant="primary"
+                          onClick={handleBulkPublish}
+                          loading={publishFetcher.state === "submitting"}
+                          icon={CheckIcon}
+                        >
+                          {`Publish All (${Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length})`}
+                        </Button>
+                        <Button
+                          variant="tertiary"
+                          tone="critical"
+                          onClick={handleDiscardAll}
+                        >
+                          {t("products.discard_all")}
+                        </Button>
+                      </InlineStack>
+                    </InlineStack>
+
+                    {/* Quick summary of optimized products */}
+                    <div style={{
+                      display: "flex",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                      paddingTop: "8px",
+                      borderTop: "1px solid var(--p-color-border)"
+                    }}>
+                      {Object.keys(optimizedProducts)
+                        .filter(id => !optimizedProducts[id].isPublished)
+                        .slice(0, 5)
+                        .map(productId => {
+                          const product = products.find(p => p.id === productId);
+                          return (
+                            <Badge key={productId} tone="success" size="small">
+                              {product?.title || optimizedProducts[productId].originalData.title}
+                            </Badge>
+                          );
+                        })}
+                      {Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length > 5 && (
+                        <Badge tone="info" size="small">
+                          {`+${Object.keys(optimizedProducts).filter(id => !optimizedProducts[id].isPublished).length - 5} more`}
+                        </Badge>
+                      )}
+                    </div>
                   </BlockStack>
                 </Box>
-              ) : (
-                <div>
-                  {products.map((product, index) => {
-                    const isOptimizing = optimizingProducts.has(product.id);
-                    const isSelected = selectedItems.includes(product.id);
-                    const isLast = index === products.length - 1;
+              </Card>
+            )}
 
-                    return (
-                      <div key={product.id}>
-                        <Box padding="400">
-                          <div style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            justifyContent: "space-between",
-                            minHeight: "120px",
-                            gap: "16px",
-                            width: "100%",
-                            position: "relative",
-                            scrollBehavior: "smooth"
-                          }}>
-                            {/* Left Section: Checkbox + Image + Content */}
+            {/* Bulk Optimization Progress Bar */}
+            {bulkOptimizationProgress.isActive && (
+              <Card>
+                <Box padding="400">
+                  <BlockStack gap="400">
+                    <InlineStack gap="300" align="space-between">
+                      <BlockStack gap="100">
+                        <Text variant="headingMd" as="h3">
+                          🤖 AI Optimization in Progress
+                        </Text>
+                        <Text variant="bodyMd" tone="subdued" as="p">
+                          {bulkOptimizationProgress.current === bulkOptimizationProgress.total
+                            ? t("products.toast_optimization_complete")
+                            : t("products.showing_products", { count: bulkOptimizationProgress.current }) + " / " + bulkOptimizationProgress.total
+                          }
+                        </Text>
+                      </BlockStack>
+                      <Text variant="bodyMd" fontWeight="semibold" as="span">
+                        {bulkOptimizationProgress.total > 0
+                          ? Math.round((bulkOptimizationProgress.current / bulkOptimizationProgress.total) * 100)
+                          : 0
+                        }%
+                      </Text>
+                    </InlineStack>
+
+                    <div style={{
+                      width: "100%",
+                      height: "8px",
+                      backgroundColor: "var(--p-color-bg-surface-secondary)",
+                      borderRadius: "4px",
+                      overflow: "hidden"
+                    }}>
+                      <div style={{
+                        width: `${bulkOptimizationProgress.total > 0
+                          ? (bulkOptimizationProgress.current / bulkOptimizationProgress.total) * 100
+                          : 0
+                          }%`,
+                        height: "100%",
+                        backgroundColor: bulkOptimizationProgress.current === bulkOptimizationProgress.total
+                          ? "var(--p-color-bg-success)"
+                          : "var(--p-color-bg-info)",
+                        transition: "width 0.3s ease, background-color 0.3s ease"
+                      }} />
+                    </div>
+
+                    <InlineStack gap="400" align="space-between">
+                      <InlineStack gap="200" align="center">
+                        {bulkOptimizationProgress.current < bulkOptimizationProgress.total && (
+                          <Spinner size="small" />
+                        )}
+                        <Text variant="bodySm" tone="subdued" as="span">
+                          {bulkOptimizationProgress.current === bulkOptimizationProgress.total
+                            ? <strong>✅ {bulkOptimizationProgress.currentProductTitle}</strong>
+                            : <>Currently optimizing: <strong>{bulkOptimizationProgress.currentProductTitle}</strong></>
+                          }
+                        </Text>
+                      </InlineStack>
+
+                      {/* Queue Status and Cancel Button */}
+                      <InlineStack gap="300">
+                        {bulkOptimizationProgress.completed > 0 && (
+                          <InlineStack gap="100" align="center">
                             <div style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "16px",
-                              flex: "1",
-                              minWidth: "0"
-                            }}>
-                              <div style={{ flexShrink: 0 }}>
-                                <Checkbox
-                                  checked={isSelected}
-                                  onChange={(checked) => {
-                                    if (checked) {
-                                      setSelectedItems([...selectedItems, product.id]);
-                                    } else {
-                                      setSelectedItems(selectedItems.filter(id => id !== product.id));
-                                    }
-                                  }}
-                                  label=""
-                                />
-                              </div>
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "var(--p-color-bg-success)"
+                            }} />
+                            <Text variant="bodySm" tone="success" as="span">
+                              {bulkOptimizationProgress.completed} completed
+                            </Text>
+                          </InlineStack>
+                        )}
+                        {bulkOptimizationProgress.failed > 0 && (
+                          <InlineStack gap="100" align="center">
+                            <div style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "var(--p-color-bg-critical)"
+                            }} />
+                            <Text variant="bodySm" tone="critical" as="span">
+                              {bulkOptimizationProgress.failed} failed
+                            </Text>
+                          </InlineStack>
+                        )}
+                        {optimizationQueue.length > 0 && (
+                          <InlineStack gap="100" align="center">
+                            <div style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              backgroundColor: "var(--p-color-bg-info)"
+                            }} />
+                            <Text variant="bodySm" tone="subdued" as="span">
+                              {optimizationQueue.length} in queue
+                            </Text>
+                          </InlineStack>
+                        )}
 
-                              <div style={{ flexShrink: 0 }}>
-                                <Thumbnail
-                                  source={product.featuredImage?.url || ""}
-                                  alt={product.title}
-                                  size="large"
-                                />
-                              </div>
+                        {/* Cancel Button */}
+                        {bulkOptimizationProgress.current < bulkOptimizationProgress.total && (
+                          <Button
+                            variant="tertiary"
+                            tone="critical"
+                            size="slim"
+                            onClick={handleCancelOptimization}
+                          >
+                            {t("common.cancel_btn")}
+                          </Button>
+                        )}
+                      </InlineStack>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              </Card>
+            )}
 
-                              <div style={{
-                                flex: "1",
-                                minWidth: "0",
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "center",
-                                gap: "8px"
-                              }}>
-                                {/* Title and Status Row */}
+            <Layout>
+              <Layout.Section>
+                {/* Filters Section */}
+                <Card>
+                  <Filters
+                    queryValue={searchValue}
+                    queryPlaceholder="Search products"
+                    onQueryChange={handleSearchChange}
+                    onQueryClear={() => setSearchValue("")}
+                    onClearAll={handleFiltersClearAll}
+                    filters={filters}
+                    appliedFilters={appliedFilters}
+                  />
+                </Card>
+
+                {/* Selection Controls */}
+                {!isLoading && (
+                  <Card>
+                    <Box padding="400">
+                      <InlineStack gap="400" align="space-between">
+                        <InlineStack gap="300">
+                          <Checkbox
+                            label={t("products.select_all")}
+                            checked={selectedItems.length === products.length && products.length > 0}
+                            onChange={(checked) => {
+                              if (checked) {
+                                setSelectedItems(products.map(p => p.id));
+                              } else {
+                                setSelectedItems([]);
+                              }
+                            }}
+                          />
+                          {selectedItems.length > 0 && (
+                            <InlineStack gap="200" align="start">
+                              <Icon source={CheckIcon} tone="subdued" />
+                              <Text variant="bodyMd" fontWeight="semibold" as="span">
+                                {selectedItems.length} of {products.length} products selected
+                              </Text>
+                            </InlineStack>
+                          )}
+                        </InlineStack>
+
+                        {selectedItems.length > 0 ? (
+                          <InlineStack gap="200">
+                            <SparkleButton
+                              onClick={handleOptimizeSelected}
+                              disabled={fetcherState === "submitting"}
+                              variant="primary"
+                            >
+                              {t("products.quick_optimize", { count: selectedItems.length })}
+                            </SparkleButton>
+                            <SparkleButton
+                              onClick={() => handleAdvancedOptimize(selectedItems)}
+                              disabled={fetcherState === "submitting"}
+                              variant="secondary"
+                            >
+                              {t("products.advanced_optimize", { count: selectedItems.length })}
+                            </SparkleButton>
+                            <Button
+                              size="slim"
+                              onClick={() => setSelectedItems([])}
+                            >
+                              {t("products.clear_selection")}
+                            </Button>
+                          </InlineStack>
+                        ) : (
+                          <div style={{ minWidth: "200px" }}>
+                            <Select
+                              label="Sort by"
+                              labelHidden
+                              options={sortOptions}
+                              value={sortValue}
+                              onChange={handleSortChange}
+                            />
+                          </div>
+                        )}
+                      </InlineStack>
+                    </Box>
+                  </Card>
+                )}
+
+                {/* Products List */}
+                {!isLoading && (
+                  <Card>
+                    {products.length === 0 ? (
+                      <Box padding="800">
+                        <BlockStack gap="400" align="center">
+                          <Text variant="headingLg" as="h3">{t("products.no_products_found")}</Text>
+                          <Text variant="bodyMd" tone="subdued" as="p">
+                            {t("products.adjust_filters_hint")}
+                          </Text>
+                        </BlockStack>
+                      </Box>
+                    ) : (
+                      <div>
+                        {products.map((product, index) => {
+                          const isOptimizing = optimizingProducts.has(product.id);
+                          const isSelected = selectedItems.includes(product.id);
+                          const isLast = index === products.length - 1;
+
+                          return (
+                            <div key={product.id}>
+                              <Box padding="400">
                                 <div style={{
                                   display: "flex",
-                                  alignItems: "center",
-                                  gap: "12px",
-                                  flexWrap: "nowrap"
+                                  alignItems: "flex-start",
+                                  justifyContent: "space-between",
+                                  minHeight: "120px",
+                                  gap: "16px",
+                                  width: "100%",
+                                  position: "relative",
+                                  scrollBehavior: "smooth"
                                 }}>
-                                  <Text variant="headingMd" as="h3" truncate>
-                                    {product.title}
-                                  </Text>
-                                  <div style={{ flexShrink: 0, display: "flex", gap: "8px", alignItems: "center" }}>
-                                    <Button
-                                      icon={ViewIcon}
-                                      variant="tertiary"
-                                      size="micro"
-                                      onClick={() => {
-                                        const productId = extractProductId(product.id);
-                                        const shopifyAdminUrl = `https://admin.shopify.com/store/${user.shop.replace('.myshopify.com', '')}/products/${productId}`;
-                                        window.open(shopifyAdminUrl, '_blank');
-                                      }}
-                                      accessibilityLabel="View in Shopify"
-                                    />
-                                    {product.isOptimized ? (
-                                      <Badge tone="success" size="small">
-                                        ✨ Optimized
-                                      </Badge>
-                                    ) : (
-                                      <Badge {...getStatusBadge(product.status)} />
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Meta Info Row */}
-                                <div style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "8px",
-                                  flexWrap: "wrap"
-                                }}>
-                                  <Text variant="bodySm" tone="subdued" as="span">
-                                    {product.productType} • {product.vendor}
-                                  </Text>
-
-                                  {product.tags && product.tags.length > 0 && (
-                                    <div style={{
-                                      display: "flex",
-                                      gap: "4px",
-                                      alignItems: "center",
-                                      flexWrap: "wrap"
-                                    }}>
-                                      {product.tags.map((tag, index) => (
-                                        <Badge key={index} tone="info" size="small">{tag}</Badge>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Optimization Status */}
-                                {isOptimizing && (
+                                  {/* Left Section: Checkbox + Image + Content */}
                                   <div style={{
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: "8px",
-                                    padding: "8px 12px",
-                                    backgroundColor: "var(--p-color-bg-success-subdued)",
-                                    borderRadius: "8px"
+                                    gap: "16px",
+                                    flex: "1",
+                                    minWidth: "0"
                                   }}>
-                                    <Spinner size="small" />
-                                    <Text variant="bodySm" tone="success" fontWeight="semibold" as="span">
-                                      ✨ Optimizing with AI...
-                                    </Text>
-                                  </div>
-                                )}
+                                    <div style={{ flexShrink: 0 }}>
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onChange={(checked) => {
+                                          if (checked) {
+                                            setSelectedItems([...selectedItems, product.id]);
+                                          } else {
+                                            setSelectedItems(selectedItems.filter(id => id !== product.id));
+                                          }
+                                        }}
+                                        label=""
+                                      />
+                                    </div>
 
-                                {/* Optimized Data Preview */}
-                                {optimizedProducts[product.id] && !optimizedProducts[product.id].isPublished && (
-                                  <div style={{
-                                    marginTop: "12px",
-                                    padding: "12px",
-                                    backgroundColor: "var(--p-color-bg-success-subdued)",
-                                    borderRadius: "8px",
-                                    border: "1px solid var(--p-color-border-success)",
-                                    transition: "all 0.2s ease-in-out"
-                                  }}>
-                                    <BlockStack gap="300">
-                                      <InlineStack gap="200" align="space-between">
-                                        <Text variant="bodyMd" tone="success" fontWeight="semibold" as="span">
-                                          ✨ Optimized Version Ready
+                                    <div style={{ flexShrink: 0 }}>
+                                      <Thumbnail
+                                        source={product.featuredImage?.url || ""}
+                                        alt={product.title}
+                                        size="large"
+                                      />
+                                    </div>
+
+                                    <div style={{
+                                      flex: "1",
+                                      minWidth: "0",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      justifyContent: "center",
+                                      gap: "8px"
+                                    }}>
+                                      {/* Title and Status Row */}
+                                      <div style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "12px",
+                                        flexWrap: "nowrap"
+                                      }}>
+                                        <Text variant="headingMd" as="h3" truncate>
+                                          {product.title}
                                         </Text>
-                                        <Button
-                                          size="micro"
-                                          variant="tertiary"
-                                          onClick={() => togglePreview(product.id)}
-                                        >
-                                          {expandedPreviews.has(product.id) ? "Hide" : "Preview"}
-                                        </Button>
-                                      </InlineStack>
-                                      
-                                      {expandedPreviews.has(product.id) && (
+                                        <div style={{ flexShrink: 0, display: "flex", gap: "8px", alignItems: "center" }}>
+                                          <Button
+                                            icon={ViewIcon}
+                                            variant="tertiary"
+                                            size="micro"
+                                            onClick={() => {
+                                              const productId = extractProductId(product.id);
+                                              const shopifyAdminUrl = `https://admin.shopify.com/store/${user.shop.replace('.myshopify.com', '')}/products/${productId}`;
+                                              window.open(shopifyAdminUrl, '_blank');
+                                            }}
+                                            accessibilityLabel={t("products.view_in_shopify")}
+                                          />
+                                          {product.isOptimized ? (
+                                            <Badge tone="success" size="small">
+                                              {`✨ ${t("products.optimized_badge")}`}
+                                            </Badge>
+                                          ) : (
+                                            <Badge {...getStatusBadge(product.status)} />
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Meta Info Row */}
+                                      <div style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        flexWrap: "wrap"
+                                      }}>
+                                        <Text variant="bodySm" tone="subdued" as="span">
+                                          {product.productType} • {product.vendor}
+                                        </Text>
+
+                                        {product.tags && product.tags.length > 0 && (
+                                          <div style={{
+                                            display: "flex",
+                                            gap: "4px",
+                                            alignItems: "center",
+                                            flexWrap: "wrap"
+                                          }}>
+                                            {product.tags.map((tag, index) => (
+                                              <Badge key={index} tone="info" size="small">{tag}</Badge>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Optimization Status */}
+                                      {isOptimizing && (
                                         <div style={{
-                                          backgroundColor: "var(--p-color-bg-surface)",
-                                          padding: "12px",
-                                          borderRadius: "6px",
-                                          border: "1px solid var(--p-color-border)",
-                                          animation: "fadeIn 0.2s ease-in-out"
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "8px",
+                                          padding: "8px 12px",
+                                          backgroundColor: "var(--p-color-bg-success-subdued)",
+                                          borderRadius: "8px"
                                         }}>
-                                          <BlockStack gap="200">
-                                            {/* Optimized Title and Status Row */}
-                                            <div style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: "12px",
-                                              flexWrap: "nowrap"
-                                            }}>
-                                              <Text variant="headingMd" tone="success" as="h3" truncate>
-                                                {optimizedProducts[product.id].optimizedData.title}
+                                          <Spinner size="small" />
+                                          <Text variant="bodySm" tone="success" fontWeight="semibold" as="span">
+                                            {`✨ ${t("products.optimizing_badge")}...`}
+                                          </Text>
+                                        </div>
+                                      )}
+
+                                      {/* Optimized Data Preview */}
+                                      {optimizedProducts[product.id] && !optimizedProducts[product.id].isPublished && (
+                                        <div style={{
+                                          marginTop: "12px",
+                                          padding: "12px",
+                                          backgroundColor: "var(--p-color-bg-success-subdued)",
+                                          borderRadius: "8px",
+                                          border: "1px solid var(--p-color-border-success)",
+                                          transition: "all 0.2s ease-in-out"
+                                        }}>
+                                          <BlockStack gap="300">
+                                            <InlineStack gap="200" align="space-between">
+                                              <Text variant="bodyMd" tone="success" fontWeight="semibold" as="span">
+                                                {`✨ ${t("products.optimized_version_ready")}`}
                                               </Text>
-                                              <div style={{ flexShrink: 0 }}>
-                                                <Badge tone="success" size="small">Optimized</Badge>
-                                              </div>
-                                            </div>
+                                              <Button
+                                                size="micro"
+                                                variant="tertiary"
+                                                onClick={() => togglePreview(product.id)}
+                                              >
+                                                {expandedPreviews.has(product.id) ? t("products.hide_preview") : t("products.show_preview")}
+                                              </Button>
+                                            </InlineStack>
 
-                                            {/* Optimized Meta Info Row */}
-                                            <div style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              gap: "8px",
-                                              flexWrap: "wrap"
-                                            }}>
-                                              <Text variant="bodySm" tone="subdued" as="span">
-                                                {optimizedProducts[product.id].optimizedData.productType} • {optimizedProducts[product.id].optimizedData.vendor || product.vendor}
-                                              </Text>
-                                            </div>
-
-                                            {/* Optimized Handle with checkbox */}
-                                            <div style={{
-                                              padding: "8px",
-                                              backgroundColor: "var(--p-color-bg-surface-secondary)",
-                                              borderRadius: "6px",
-                                              border: "1px solid var(--p-color-border)"
-                                            }}>
+                                            {expandedPreviews.has(product.id) && (
                                               <div style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "8px",
-                                                justifyContent: "space-between"
-                                              }}>
-                                                <div style={{ flex: 1 }}>
-                                                  <Text variant="bodySm" tone="subdued" as="span">
-                                                    New URL:
-                                                  </Text>
-                                                  <Text variant="bodySm" fontWeight="medium" as="p">
-                                                    /{optimizedProducts[product.id].optimizedData.handle}
-                                                  </Text>
-                                                </div>
-                                                <Checkbox
-                                                  label="Update URL"
-                                                  checked={urlUpdateSettings[product.id] ?? true}
-                                                  onChange={(checked) => {
-                                                    setUrlUpdateSettings(prev => ({
-                                                      ...prev,
-                                                      [product.id]: checked
-                                                    }));
-                                                  }}
-                                                />
-                                              </div>
-                                            </div>
-
-                                            {/* SEO Section - shown when either seoTitle or seoDescription exists */}
-                                            {(optimizedProducts[product.id].optimizedData.seoTitle || optimizedProducts[product.id].optimizedData.seoDescription) && (
-                                              <div style={{
-                                                padding: "8px",
-                                                backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                                backgroundColor: "var(--p-color-bg-surface)",
+                                                padding: "12px",
                                                 borderRadius: "6px",
-                                                border: "1px solid var(--p-color-border)"
+                                                border: "1px solid var(--p-color-border)",
+                                                animation: "fadeIn 0.2s ease-in-out"
                                               }}>
-                                                <div style={{
-                                                  display: "flex",
-                                                  alignItems: "center",
-                                                  gap: "8px",
-                                                  justifyContent: "space-between",
-                                                  marginBottom: "8px"
-                                                }}>
-                                                  <Text variant="bodySm" fontWeight="semibold" as="span">
-                                                    SEO Metadata
-                                                  </Text>
-                                                  <Checkbox
-                                                    label="Update SEO"
-                                                    checked={seoUpdateSettings[product.id] ?? true}
-                                                    onChange={(checked) => {
-                                                      setSeoUpdateSettings(prev => ({
-                                                        ...prev,
-                                                        [product.id]: checked
-                                                      }));
-                                                    }}
-                                                  />
-                                                </div>
-
-                                                {/* SEO Meta Title */}
-                                                {optimizedProducts[product.id].optimizedData.seoTitle && (
-                                                  <div style={{ marginBottom: optimizedProducts[product.id].optimizedData.seoDescription ? "8px" : "0" }}>
-                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
-                                                      <Text variant="bodySm" tone="subdued" as="span">
-                                                        Meta Title:
-                                                      </Text>
-                                                      <Badge tone="info" size="small">
-                                                        {`${optimizedProducts[product.id].optimizedData.seoTitle?.length || 0} characters`}
-                                                      </Badge>
+                                                <BlockStack gap="200">
+                                                  {/* Optimized Title and Status Row */}
+                                                  <div style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "12px",
+                                                    flexWrap: "nowrap"
+                                                  }}>
+                                                    <Text variant="headingMd" tone="success" as="h3" truncate>
+                                                      {optimizedProducts[product.id].optimizedData.title}
+                                                    </Text>
+                                                    <div style={{ flexShrink: 0 }}>
+                                                      <Badge tone="success" size="small">Optimized</Badge>
                                                     </div>
-                                                    <Text variant="bodySm" fontWeight="medium" as="p">
-                                                      {optimizedProducts[product.id].optimizedData.seoTitle}
+                                                  </div>
+
+                                                  {/* Optimized Meta Info Row */}
+                                                  <div style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "8px",
+                                                    flexWrap: "wrap"
+                                                  }}>
+                                                    <Text variant="bodySm" tone="subdued" as="span">
+                                                      {optimizedProducts[product.id].optimizedData.productType} • {optimizedProducts[product.id].optimizedData.vendor || product.vendor}
                                                     </Text>
                                                   </div>
-                                                )}
 
-                                                {/* SEO Meta Description */}
-                                                {optimizedProducts[product.id].optimizedData.seoDescription && (
+                                                  {/* Optimized Handle with checkbox */}
+                                                  <div style={{
+                                                    padding: "8px",
+                                                    backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                                    borderRadius: "6px",
+                                                    border: "1px solid var(--p-color-border)"
+                                                  }}>
+                                                    <div style={{
+                                                      display: "flex",
+                                                      alignItems: "center",
+                                                      gap: "8px",
+                                                      justifyContent: "space-between"
+                                                    }}>
+                                                      <div style={{ flex: 1 }}>
+                                                        <Text variant="bodySm" tone="subdued" as="span">
+                                                          New URL:
+                                                        </Text>
+                                                        <Text variant="bodySm" fontWeight="medium" as="p">
+                                                          /{optimizedProducts[product.id].optimizedData.handle}
+                                                        </Text>
+                                                      </div>
+                                                      <Checkbox
+                                                        label="Update URL"
+                                                        checked={urlUpdateSettings[product.id] ?? true}
+                                                        onChange={(checked) => {
+                                                          setUrlUpdateSettings(prev => ({
+                                                            ...prev,
+                                                            [product.id]: checked
+                                                          }));
+                                                        }}
+                                                      />
+                                                    </div>
+                                                  </div>
+                                                  {/* SEO Section - shown when either seoTitle or seoDescription exists */}
+                                                  {(optimizedProducts[product.id].optimizedData.seoTitle || optimizedProducts[product.id].optimizedData.seoDescription) && (
+                                                    <div style={{
+                                                      padding: "8px",
+                                                      backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                                      borderRadius: "6px",
+                                                      border: "1px solid var(--p-color-border)"
+                                                    }}>
+                                                      <div style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: "8px",
+                                                        justifyContent: "space-between",
+                                                        marginBottom: "8px"
+                                                      }}>
+                                                        <Text variant="bodySm" fontWeight="semibold" as="span">
+                                                          SEO Metadata
+                                                        </Text>
+                                                        <Checkbox
+                                                          label="Update SEO"
+                                                          checked={seoUpdateSettings[product.id] ?? true}
+                                                          onChange={(checked) => {
+                                                            setSeoUpdateSettings(prev => ({
+                                                              ...prev,
+                                                              [product.id]: checked
+                                                            }));
+                                                          }}
+                                                        />
+                                                      </div>
+
+                                                      {/* SEO Meta Title */}
+                                                      {optimizedProducts[product.id].optimizedData.seoTitle && (
+                                                        <div style={{ marginBottom: optimizedProducts[product.id].optimizedData.seoDescription ? "8px" : "0" }}>
+                                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                                                            <Text variant="bodySm" tone="subdued" as="span">
+                                                              Meta Title:
+                                                            </Text>
+                                                            <Badge tone="info" size="small">
+                                                              {`${optimizedProducts[product.id].optimizedData.seoTitle?.length || 0} characters`}
+                                                            </Badge>
+                                                          </div>
+                                                          <Text variant="bodySm" fontWeight="medium" as="p">
+                                                            {optimizedProducts[product.id].optimizedData.seoTitle}
+                                                          </Text>
+                                                        </div>
+                                                      )}
+
+                                                      {/* SEO Meta Description */}
+                                                      {optimizedProducts[product.id].optimizedData.seoDescription && (
+                                                        <div>
+                                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                                                            <Text variant="bodySm" tone="subdued" as="span">
+                                                              Meta Description:
+                                                            </Text>
+                                                            <Badge tone={(optimizedProducts[product.id].optimizedData.seoDescription?.length || 0) <= 150 ? "success" : "critical"} size="small">
+                                                              {`${optimizedProducts[product.id].optimizedData.seoDescription?.length || 0}/150`}
+                                                            </Badge>
+                                                          </div>
+                                                          <Text variant="bodySm" as="p">
+                                                            {optimizedProducts[product.id].optimizedData.seoDescription}
+                                                          </Text>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  )}
+
+                                                  {/* Optimized Description Dropdown */}
                                                   <div>
-                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                                                    <InlineStack gap="200" align="space-between">
                                                       <Text variant="bodySm" tone="subdued" as="span">
-                                                        Meta Description:
+                                                        Optimized Description:
                                                       </Text>
-                                                      <Badge tone={(optimizedProducts[product.id].optimizedData.seoDescription?.length || 0) <= 150 ? "success" : "critical"} size="small">
-                                                        {`${optimizedProducts[product.id].optimizedData.seoDescription?.length || 0}/150`}
-                                                      </Badge>
-                                                    </div>
-                                                    <Text variant="bodySm" as="p">
-                                                      {optimizedProducts[product.id].optimizedData.seoDescription}
-                                                    </Text>
+                                                      <Button
+                                                        variant="tertiary"
+                                                        onClick={() => {
+                                                          const newExpanded = new Set(expandedDescriptions);
+                                                          if (newExpanded.has(product.id)) {
+                                                            newExpanded.delete(product.id);
+                                                          } else {
+                                                            newExpanded.add(product.id);
+                                                          }
+                                                          setExpandedDescriptions(newExpanded);
+                                                        }}
+                                                      >
+                                                        {expandedDescriptions.has(product.id) ? "Hide" : "Show"}
+                                                      </Button>
+                                                    </InlineStack>
+
+                                                    {expandedDescriptions.has(product.id) && (
+                                                      <div style={{
+                                                        marginTop: "8px",
+                                                        padding: "12px",
+                                                        backgroundColor: "var(--p-color-bg-surface-secondary)",
+                                                        borderRadius: "6px",
+                                                        border: "1px solid var(--p-color-border)",
+                                                        maxHeight: "200px",
+                                                        overflowY: "auto"
+                                                      }}>
+                                                        <div
+                                                          style={{
+                                                            fontSize: "14px",
+                                                            lineHeight: "1.4",
+                                                            wordBreak: "break-word"
+                                                          }}
+                                                          dangerouslySetInnerHTML={{
+                                                            __html: optimizedProducts[product.id].optimizedData.description
+                                                          }}
+                                                        />
+                                                      </div>
+                                                    )}
                                                   </div>
-                                                )}
+
+                                                  {/* Optimized Tags */}
+                                                  {optimizedProducts[product.id].optimizedData.tags && optimizedProducts[product.id].optimizedData.tags.length > 0 && (
+                                                    <div>
+                                                      <div style={{ marginBottom: "4px", display: "block" }}>
+                                                        <Text variant="bodySm" tone="subdued" as="span">
+                                                          Tags:
+                                                        </Text>
+                                                      </div>
+                                                      <div style={{
+                                                        display: "flex",
+                                                        gap: "4px",
+                                                        alignItems: "center",
+                                                        flexWrap: "wrap"
+                                                      }}>
+                                                        {optimizedProducts[product.id].optimizedData.tags.map((tag: string, index: number) => (
+                                                          <Badge key={index} tone="success" size="small">{tag}</Badge>
+                                                        ))}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </BlockStack>
                                               </div>
                                             )}
 
-                                            {/* Optimized Description Dropdown */}
-                                            <div>
-                                              <InlineStack gap="200" align="space-between">
-                                                <Text variant="bodySm" tone="subdued" as="span">
-                                                  Optimized Description:
-                                                </Text>
-                                                <Button
-                                                  size="micro"
-                                                  variant="tertiary"
-                                                  onClick={() => toggleDescription(product.id)}
-                                                >
-                                                  {expandedDescriptions.has(product.id) ? "Hide" : "Show"}
-                                                </Button>
-                                              </InlineStack>
-                                              
-                                              {expandedDescriptions.has(product.id) && (
-                                                <div style={{
-                                                  marginTop: "8px",
-                                                  padding: "12px",
-                                                  backgroundColor: "var(--p-color-bg-surface-secondary)",
-                                                  borderRadius: "6px",
-                                                  border: "1px solid var(--p-color-border)",
-                                                  maxHeight: "200px",
-                                                  overflowY: "auto"
-                                                }}>
-                                                  <div 
-                                                    style={{
-                                                      fontSize: "14px",
-                                                      lineHeight: "1.4",
-                                                      wordBreak: "break-word"
-                                                    }}
-                                                    dangerouslySetInnerHTML={{ 
-                                                      __html: optimizedProducts[product.id].optimizedData.description 
-                                                    }}
-                                                  />
-                                                </div>
-                                              )}
-                                            </div>
-
-                                            {/* Optimized Tags */}
-                                            {optimizedProducts[product.id].optimizedData.tags && optimizedProducts[product.id].optimizedData.tags.length > 0 && (
-                                              <div>
-                                                <div style={{ marginBottom: "4px", display: "block" }}>
-                                                  <Text variant="bodySm" tone="subdued" as="span">
-                                                    Tags:
-                                                  </Text>
-                                                </div>
-                                                <div style={{
-                                                  display: "flex",
-                                                  gap: "4px",
-                                                  alignItems: "center",
-                                                  flexWrap: "wrap"
-                                                }}>
-                                                  {optimizedProducts[product.id].optimizedData.tags.map((tag: string, index: number) => (
-                                                    <Badge key={index} tone="success" size="small">{tag}</Badge>
-                                                  ))}
-                                                </div>
-                                              </div>
-                                            )}
+                                            <InlineStack gap="200">
+                                              <Button
+                                                variant="primary"
+                                                size="slim"
+                                                onClick={() => handlePublishProduct(product.id)}
+                                                loading={publishFetcher.state === "submitting"}
+                                              >
+                                                Publish Changes
+                                              </Button>
+                                              <Button
+                                                variant="tertiary"
+                                                tone="critical"
+                                                size="slim"
+                                                onClick={() => handleDenyProduct(product.id)}
+                                              >
+                                                Discard
+                                              </Button>
+                                            </InlineStack>
                                           </BlockStack>
                                         </div>
                                       )}
 
-                                      <InlineStack gap="200">
-                                        <Button
-                                          variant="primary"
-                                          size="slim"
-                                          onClick={() => handlePublishProduct(product.id)}
-                                          loading={publishFetcher.state === "submitting"}
-                                        >
-                                          Publish Changes
-                                        </Button>
-                                        <Button
-                                          variant="tertiary"
-                                          tone="critical"
-                                          size="slim"
-                                          onClick={() => handleDenyProduct(product.id)}
-                                        >
-                                          Discard
-                                        </Button>
-                                      </InlineStack>
-                                    </BlockStack>
+                                      {/* Published Status */}
+                                      {optimizedProducts[product.id] && optimizedProducts[product.id].isPublished && (
+                                        <div style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "8px",
+                                          padding: "8px 12px",
+                                          backgroundColor: "var(--p-color-bg-success-subdued)",
+                                          borderRadius: "8px"
+                                        }}>
+                                          <Text variant="bodySm" tone="success" fontWeight="semibold" as="span">
+                                            ✅ Published Successfully!
+                                          </Text>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                )}
 
-                                {/* Published Status */}
-                                {optimizedProducts[product.id] && optimizedProducts[product.id].isPublished && (
+                                  {/* Right Section: Action Buttons and Status Badge */}
                                   <div style={{
+                                    flexShrink: 0,
                                     display: "flex",
-                                    alignItems: "center",
+                                    alignItems: "flex-start",
                                     gap: "8px",
-                                    padding: "8px 12px",
-                                    backgroundColor: "var(--p-color-bg-success-subdued)",
-                                    borderRadius: "8px"
+                                    position: "relative"
                                   }}>
-                                    <Text variant="bodySm" tone="success" fontWeight="semibold" as="span">
-                                      ✅ Published Successfully!
-                                    </Text>
+                                    {!isOptimizing && !optimizedProducts[product.id] && (
+                                      <div style={{
+                                        display: "flex",
+                                        gap: "8px"
+                                      }}>
+                                        <SparkleButton
+                                          onClick={() => handleOptimizeSingle(product.id)}
+                                          disabled={isOptimizing || bulkOptimizationProgress.isActive}
+                                          variant="primary"
+                                        >
+                                          Quick Optimize
+                                        </SparkleButton>
+                                        <SparkleButton
+                                          onClick={() => handleAdvancedOptimize([product.id])}
+                                          disabled={isOptimizing || bulkOptimizationProgress.isActive}
+                                          variant="secondary"
+                                        >
+                                          Advanced
+                                        </SparkleButton>
+                                      </div>
+                                    )}
+
                                   </div>
-                                )}
-                              </div>
-                            </div>
 
-                            {/* Right Section: Action Buttons and Status Badge */}
-                            <div style={{
-                              flexShrink: 0,
-                              display: "flex",
-                              alignItems: "flex-start",
-                              gap: "8px",
-                              position: "relative"
-                            }}>
-                              {!isOptimizing && !optimizedProducts[product.id] && (
-                                <div style={{
-                                  display: "flex",
-                                  gap: "8px"
-                                }}>
-                                  <SparkleButton
-                                    onClick={() => handleOptimizeSingle(product.id)}
-                                    disabled={isOptimizing || bulkOptimizationProgress.isActive}
-                                    variant="primary"
-                                  >
-                                    Quick Optimize
-                                  </SparkleButton>
-                                  <SparkleButton
-                                    onClick={() => handleAdvancedOptimize([product.id])}
-                                    disabled={isOptimizing || bulkOptimizationProgress.isActive}
-                                    variant="secondary"
-                                  >
-                                    Advanced
-                                  </SparkleButton>
                                 </div>
+                              </Box>
+
+                              {/* Divider between items (except last) */}
+                              {!isLast && (
+                                <Divider />
                               )}
-                              
                             </div>
-
-                          </div>
-                        </Box>
-
-                        {/* Divider between items (except last) */}
-                        {!isLast && (
-                          <Divider />
-                        )}
-                      </div>
-                    );
-                  })}</div>
-              )}
-            </Card>
-            )}
-
-            {/* Pagination */}
-            {!isLoading && (pageInfo.hasNextPage || pageInfo.hasPreviousPage || products.length > 0) && (
-              <Card>
-                <Box padding="400">
-                  <InlineStack align="space-between">
-                    <InlineStack gap="300" align="center">
-                      <Text variant="bodySm" tone="subdued" as="span">
-                        Showing {((currentPage - 1) * productsPerPage) + 1}-{Math.min(currentPage * productsPerPage, ((currentPage - 1) * productsPerPage) + products.length)} of {products.length} products
-                      </Text>
-                      <Select
-                        label="Products per page"
-                        labelHidden
-                        options={[
-                          { label: "10 per page", value: "10" },
-                          { label: "25 per page", value: "25" },
-                          { label: "50 per page", value: "50" },
-                        ]}
-                        value={selectedProductsPerPage}
-                        onChange={handleProductsPerPageChange}
-                      />
-                    </InlineStack>
-                    {(pageInfo.hasNextPage || pageInfo.hasPreviousPage) && (
-                      <Pagination
-                        hasPrevious={pageInfo.hasPreviousPage}
-                        onPrevious={handlePrevious}
-                        hasNext={pageInfo.hasNextPage}
-                        onNext={handleNext}
-                      />
+                          );
+                        })}</div>
                     )}
-                  </InlineStack>
-                </Box>
-              </Card>
-            )}
-          </Layout.Section>
-        </Layout>
-        {toastMarkup}
+                  </Card>
+                )}
 
-        <Modal
-          open={showAdvancedModal}
-          onClose={() => setShowAdvancedModal(false)}
-          title="Advanced SEO Optimization (2025 Best Practices)"
-          primaryAction={{
-            content: "Optimize Products",
-            onAction: handleAdvancedOptimizeSubmit,
-          }}
-          secondaryActions={[
-            {
-              content: "Cancel",
-              onAction: () => setShowAdvancedModal(false),
-            },
-          ]}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Text variant="bodyMd" as="p">
-                Provide additional context to optimize {`${pendingOptimizationIds.length}`} product(s) using 2025 SEO best practices.
-              </Text>
+                {/* Pagination */}
+                {!isLoading && (pageInfo.hasNextPage || pageInfo.hasPreviousPage || products.length > 0) && (
+                  <Card>
+                    <Box padding="400">
+                      <InlineStack align="space-between">
+                        <InlineStack gap="300" align="center">
+                          <Text variant="bodySm" tone="subdued" as="span">
+                            Showing {((currentPage - 1) * productsPerPage) + 1}-{Math.min(currentPage * productsPerPage, ((currentPage - 1) * productsPerPage) + products.length)} of {products.length} products
+                          </Text>
+                          <Select
+                            label="Products per page"
+                            labelHidden
+                            options={[
+                              { label: "10 per page", value: "10" },
+                              { label: "25 per page", value: "25" },
+                              { label: "50 per page", value: "50" },
+                            ]}
+                            value={selectedProductsPerPage}
+                            onChange={handleProductsPerPageChange}
+                          />
+                        </InlineStack>
+                        {(pageInfo.hasNextPage || pageInfo.hasPreviousPage) && (
+                          <Pagination
+                            hasPrevious={pageInfo.hasPreviousPage}
+                            onPrevious={handlePrevious}
+                            hasNext={pageInfo.hasNextPage}
+                            onNext={handleNext}
+                          />
+                        )}
+                      </InlineStack>
+                    </Box>
+                  </Card>
+                )}
+              </Layout.Section>
+            </Layout>
+            {toastMarkup}
 
-              <FormLayout>
-                <TextField
-                  label="Target Keywords"
-                  value={advancedContext.targetKeywords}
-                  onChange={(value) => handleAdvancedContextChange("targetKeywords", value)}
-                  placeholder="e.g., best running shoes for men 2025"
-                  helpText="Primary keywords you want to rank for"
-                  autoComplete="off"
-                />
+            <Modal
+              open={showAdvancedModal}
+              onClose={() => setShowAdvancedModal(false)}
+              title="Advanced SEO Optimization (2025 Best Practices)"
+              primaryAction={{
+                content: "Optimize Products",
+                onAction: handleAdvancedOptimizeSubmit,
+              }}
+              secondaryActions={[
+                {
+                  content: "Cancel",
+                  onAction: () => setShowAdvancedModal(false),
+                },
+              ]}
+            >
+              <Modal.Section>
+                <BlockStack gap="400">
+                  <Text variant="bodyMd" as="p">
+                    Provide additional context to optimize {`${pendingOptimizationIds.length}`} product(s) using 2025 SEO best practices.
+                  </Text>
 
-                <TextField
-                  label="Brand"
-                  value={advancedContext.brand}
-                  onChange={(value) => handleAdvancedContextChange("brand", value)}
-                  placeholder="e.g., Nike, Adidas"
-                  helpText="Brand name if not obvious from product title"
-                  autoComplete="off"
-                />
+                  <FormLayout>
+                    <TextField
+                      label="Target Keywords"
+                      value={advancedContext.targetKeywords}
+                      onChange={(value) => handleAdvancedContextChange("targetKeywords", value)}
+                      placeholder="e.g., best running shoes for men 2025"
+                      helpText="Primary keywords you want to rank for"
+                      autoComplete="off"
+                    />
 
-                <TextField
-                  label="Key Features/Benefits"
-                  value={advancedContext.keyFeatures}
-                  onChange={(value) => handleAdvancedContextChange("keyFeatures", value)}
-                  placeholder="e.g., lightweight, cushioned, breathable mesh"
-                  helpText="Main selling points and features"
-                  multiline={2}
-                  autoComplete="off"
-                />
+                    <TextField
+                      label="Brand"
+                      value={advancedContext.brand}
+                      onChange={(value) => handleAdvancedContextChange("brand", value)}
+                      placeholder="e.g., Nike, Adidas"
+                      helpText="Brand name if not obvious from product title"
+                      autoComplete="off"
+                    />
 
-                <Select
-                  label="Target Audience"
-                  options={[
-                    { label: "General consumers", value: "General consumers" },
-                    { label: "Men", value: "Men" },
-                    { label: "Women", value: "Women" },
-                    { label: "Athletes/Sports enthusiasts", value: "Athletes" },
-                    { label: "Professionals", value: "Professionals" },
-                    { label: "Students", value: "Students" },
-                    { label: "Seniors", value: "Seniors" },
-                  ]}
-                  value={advancedContext.targetAudience}
-                  onChange={(value) => handleAdvancedContextChange("targetAudience", value)}
-                />
+                    <TextField
+                      label="Key Features/Benefits"
+                      value={advancedContext.keyFeatures}
+                      onChange={(value) => handleAdvancedContextChange("keyFeatures", value)}
+                      placeholder="e.g., lightweight, cushioned, breathable mesh"
+                      helpText="Main selling points and features"
+                      multiline={2}
+                      autoComplete="off"
+                    />
 
-                <TextField
-                  label="Primary Use Case"
-                  value={advancedContext.useCase}
-                  onChange={(value) => handleAdvancedContextChange("useCase", value)}
-                  placeholder="e.g., running, training, casual wear"
-                  helpText="How will customers primarily use this product?"
-                  autoComplete="off"
-                />
+                    <Select
+                      label="Target Audience"
+                      options={[
+                        { label: "General consumers", value: "General consumers" },
+                        { label: "Men", value: "Men" },
+                        { label: "Women", value: "Women" },
+                        { label: "Athletes/Sports enthusiasts", value: "Athletes" },
+                        { label: "Professionals", value: "Professionals" },
+                        { label: "Students", value: "Students" },
+                        { label: "Seniors", value: "Seniors" },
+                      ]}
+                      value={advancedContext.targetAudience}
+                      onChange={(value) => handleAdvancedContextChange("targetAudience", value)}
+                    />
 
-                <BlockStack gap="200">
-                  <Text variant="headingMd" as="h3">Advanced Settings</Text>
+                    <TextField
+                      label="Primary Use Case"
+                      value={advancedContext.useCase}
+                      onChange={(value) => handleAdvancedContextChange("useCase", value)}
+                      placeholder="e.g., running, training, casual wear"
+                      helpText="How will customers primarily use this product?"
+                      autoComplete="off"
+                    />
 
-                  <Checkbox
-                    label="Voice Search Optimization"
-                    checked={advancedContext.voiceSearchOptimization}
-                    onChange={(checked) => handleAdvancedContextChange("voiceSearchOptimization", checked)}
-                    helpText="Include natural Q&A patterns for voice search"
-                  />
-
-                  <Checkbox
-                    label="Competitor Analysis"
-                    checked={advancedContext.competitorAnalysis}
-                    onChange={(checked) => handleAdvancedContextChange("competitorAnalysis", checked)}
-                    helpText="Use competitive keywords and positioning"
-                  />
-                </BlockStack>
-              </FormLayout>
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-
-        {/* Special Instructions Modal */}
-        <Modal
-          open={showSpecialInstructionsModal}
-          onClose={() => setShowSpecialInstructionsModal(false)}
-          title="Special Optimization Instructions"
-          primaryAction={{
-            content: "Save Instructions",
-            onAction: () => setShowSpecialInstructionsModal(false),
-          }}
-          secondaryActions={[
-            {
-              content: "Cancel",
-              onAction: () => setShowSpecialInstructionsModal(false),
-            },
-          ]}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Text variant="bodyMd" as="p">
-                Add custom instructions that will be included in every product optimization. These instructions will guide the AI to follow your specific requirements and brand guidelines.
-              </Text>
-
-              <TextField
-                label="Special Instructions"
-                value={specialInstructions}
-                onChange={setSpecialInstructions}
-                placeholder="e.g., Always emphasize eco-friendly materials, use casual tone, include size guide mentions, focus on durability..."
-                multiline={6}
-                helpText="These instructions will be applied to all optimizations (both quick and advanced)"
-                autoComplete="off"
-              />
-
-              {specialInstructions && (
-                <Card>
-                  <Box padding="300">
                     <BlockStack gap="200">
-                      <Text variant="headingSm" as="h4">Preview</Text>
-                      <Text variant="bodySm" tone="subdued" as="p">
-                        Your special instructions: "{specialInstructions}"
-                      </Text>
+                      <Text variant="headingMd" as="h3">Advanced Settings</Text>
+
+                      <Checkbox
+                        label="Voice Search Optimization"
+                        checked={advancedContext.voiceSearchOptimization}
+                        onChange={(checked) => handleAdvancedContextChange("voiceSearchOptimization", checked)}
+                        helpText="Include natural Q&A patterns for voice search"
+                      />
+
+                      <Checkbox
+                        label="Competitor Analysis"
+                        checked={advancedContext.competitorAnalysis}
+                        onChange={(checked) => handleAdvancedContextChange("competitorAnalysis", checked)}
+                        helpText="Use competitive keywords and positioning"
+                      />
                     </BlockStack>
-                  </Box>
-                </Card>
-              )}
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
-        </Page>
-      </Frame>
+                  </FormLayout>
+                </BlockStack>
+              </Modal.Section>
+            </Modal>
+
+            {/* Special Instructions Modal */}
+            <Modal
+              open={showSpecialInstructionsModal}
+              onClose={() => setShowSpecialInstructionsModal(false)}
+              title="Special Optimization Instructions"
+              primaryAction={{
+                content: "Save Instructions",
+                onAction: () => setShowSpecialInstructionsModal(false),
+              }}
+              secondaryActions={[
+                {
+                  content: "Cancel",
+                  onAction: () => setShowSpecialInstructionsModal(false),
+                },
+              ]}
+            >
+              <Modal.Section>
+                <BlockStack gap="400">
+                  <Text variant="bodyMd" as="p">
+                    Add custom instructions that will be included in every product optimization. These instructions will guide the AI to follow your specific requirements and brand guidelines.
+                  </Text>
+
+                  <TextField
+                    label="Special Instructions"
+                    value={specialInstructions}
+                    onChange={setSpecialInstructions}
+                    placeholder="e.g., Always emphasize eco-friendly materials, use casual tone, include size guide mentions, focus on durability..."
+                    multiline={6}
+                    helpText="These instructions will be applied to all optimizations (both quick and advanced)"
+                    autoComplete="off"
+                  />
+
+                  {specialInstructions && (
+                    <Card>
+                      <Box padding="300">
+                        <BlockStack gap="200">
+                          <Text variant="headingSm" as="h4">Preview</Text>
+                          <Text variant="bodySm" tone="subdued" as="p">
+                            Your special instructions: "{specialInstructions}"
+                          </Text>
+                        </BlockStack>
+                      </Box>
+                    </Card>
+                  )}
+                </BlockStack>
+              </Modal.Section>
+            </Modal>
+          </Page>
+        </Frame>
       </ErrorBoundary>
     </ClientOnly>
   );

@@ -1,13 +1,14 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import i18nextServer from "../i18next.server";
 import { Outlet, useLoaderData, useRouteError, useSearchParams } from "@remix-run/react";
+import { useTranslation } from "react-i18next";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { AppProvider as PolarisAppProvider, Frame } from "@shopify/polaris";
 import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
-import polarisTranslations from "@shopify/polaris/locales/en.json" with { type: "json" };
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { IframeErrorBoundary } from "../components/IframeErrorBoundary";
 import { authenticate } from "../shopify.server";
@@ -32,13 +33,39 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     await ensureUserExists(session.shop);
   }
 
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  const locale = await i18nextServer.getLocale(request);
+
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", locale };
 };
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, locale } = useLoaderData<typeof loader>();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const host = searchParams.get("host");
+
+  const [polarisTranslations, setPolarisTranslations] = useState<any>(null);
+
+  useEffect(() => {
+    // Load Polaris translations based on detected locale
+    const loadTranslations = async () => {
+      try {
+        let translations;
+        if (locale === 'es') {
+          translations = await import("@shopify/polaris/locales/es.json");
+        } else {
+          translations = await import("@shopify/polaris/locales/en.json");
+        }
+        setPolarisTranslations(translations.default || translations);
+      } catch (error) {
+        console.error("Failed to load Polaris translations", error);
+        // Fallback to English
+        const translations = await import("@shopify/polaris/locales/en.json");
+        setPolarisTranslations(translations.default || translations);
+      }
+    };
+    loadTranslations();
+  }, [locale]);
 
   // Create navigation paths with host parameter
   const getNavPath = useCallback((basePath: string) => {
@@ -48,20 +75,20 @@ export default function App() {
   return (
     <IframeErrorBoundary>
       <AppProvider isEmbeddedApp apiKey={apiKey}>
-        <PolarisAppProvider i18n={polarisTranslations}>
+        <PolarisAppProvider i18n={polarisTranslations || {}}>
           <Frame>
             <NavMenu>
               <a href={getNavPath('/app')} rel="home">
-                Home
+                {t("nav.home")}
               </a>
               <a href={getNavPath('/app/products')}>
-                SEO Optimization
+                {t("nav.seo_optimization")}
               </a>
               <a href={getNavPath('/app/pricing')}>
-                Pricing
+                {t("nav.pricing")}
               </a>
               <a href={getNavPath('/app/help')}>
-                Help & Support
+                {t("nav.help")}
               </a>
             </NavMenu>
             <Outlet />

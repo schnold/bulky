@@ -232,17 +232,33 @@ const enCommon = {
     }
 };
 
+
 function resolveKey(key: string, obj: any): string {
+    // 1. Try resolving as dot notation first
     const parts = key.split('.');
     let current = obj;
+    let found = true;
     for (const part of parts) {
         if (current && typeof current === 'object' && part in current) {
             current = current[part];
         } else {
-            return key; // Fallback to key if not found
+            found = false;
+            break;
         }
     }
-    return typeof current === 'string' ? current : key;
+    if (found && typeof current === 'string') return current;
+
+    // 2. If not found, and key has no dots (simple key), try finding it in top-level namespaces
+    if (parts.length === 1 && typeof obj === 'object') {
+        for (const namespace in obj) {
+            if (typeof obj[namespace] === 'object' && key in obj[namespace]) {
+                const val = obj[namespace][key];
+                if (typeof val === 'string') return val;
+            }
+        }
+    }
+
+    return key;
 }
 
 const t = (key: string, options?: any) => {

@@ -2254,9 +2254,11 @@ export default function Products() {
                     <Box padding="400">
                       <InlineStack align="space-between">
                         <InlineStack gap="300" align="center">
-                          <Text variant="bodySm" tone="subdued" as="span">
-                            Showing {((currentPage - 1) * productsPerPage) + 1}-{Math.min(currentPage * productsPerPage, ((currentPage - 1) * productsPerPage) + products.length)} of {products.length} products
-                          </Text>
+                          <div style={{ display: "flex", alignItems: "center" }}>
+                            <Text variant="bodySm" tone="subdued" as="span">
+                              Showing {((currentPage - 1) * productsPerPage) + 1}-{Math.min(currentPage * productsPerPage, ((currentPage - 1) * productsPerPage) + products.length)} of {products.length} products
+                            </Text>
+                          </div>
                           <Select
                             label="Products per page"
                             labelHidden
@@ -2279,11 +2281,13 @@ export default function Products() {
                                 onNext={handleNext}
                               />
                               <InlineStack gap="200" align="center">
-                                <Text variant="bodySm" tone="subdued" as="span">
-                                  Page {currentPage}
-                                </Text>
+                                <div style={{ display: "flex", alignItems: "center" }}>
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Page {currentPage}
+                                  </Text>
+                                </div>
                                 <div 
-                                  style={{ width: "80px" }}
+                                  style={{ width: "100px", display: "flex", alignItems: "center" }}
                                   onKeyDown={(e: React.KeyboardEvent) => {
                                     if (e.key === "Enter") {
                                       handleGoToPage();

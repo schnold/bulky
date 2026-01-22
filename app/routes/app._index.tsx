@@ -326,11 +326,7 @@ export default function Index() {
     });
   }, [aiInput, keywordGenFetcher, isKeywordGenLoading]);
 
-  const handleLanguageChange = useCallback((newLocale: string) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set("locale", newLocale);
-    setSearchParams(newParams);
-  }, [searchParams, setSearchParams]);
+
 
   // Check if user has Pro or Enterprise plan
   const hasProOrEnterprise = user && (user.plan === "pro" || user.plan === "enterprise");
@@ -447,22 +443,7 @@ export default function Index() {
               </BlockStack>
             </Card>
 
-            {/* Language Selector Card */}
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">{t("language_selector_title")}</Text>
-                <Select
-                  label={t("language_selector_title")}
-                  labelHidden
-                  options={[
-                    { label: "English", value: "en" },
-                    { label: "Español", value: "es" },
-                  ]}
-                  onChange={handleLanguageChange}
-                  value={i18nInstance.language}
-                />
-              </BlockStack>
-            </Card>
+
 
             {/* Keywords Management Card */}
             {!user && isUserDataLoading ? (
@@ -574,6 +555,8 @@ export default function Index() {
 
           <Layout.Section variant="oneThird">
             <BlockStack gap="500">
+
+
               {/* Plan & Credits Card */}
               {!accountData && isAccountDataLoading ? (
                 <AccountLoadingState />

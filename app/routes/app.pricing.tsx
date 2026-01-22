@@ -897,7 +897,7 @@ export default function Pricing() {
               <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3 }}>
                 <PricingCard
                   title={t("index.plan_starter")}
-                  price="$19"
+                  price="$9.99"
                   period={t("pricing.per_month")}
                   description="Perfect for growing stores"
                   features={planFeatures.map(f => f.starter)}
@@ -912,7 +912,7 @@ export default function Pricing() {
               <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3 }}>
                 <PricingCard
                   title={t("index.plan_pro")}
-                  price="$49"
+                  price="$29.99"
                   period={t("pricing.per_month")}
                   description="Advanced tools for larger inventories"
                   features={planFeatures.map(f => f.pro)}
@@ -928,7 +928,7 @@ export default function Pricing() {
               <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 3, lg: 3 }}>
                 <PricingCard
                   title={t("index.plan_enterprise")}
-                  price="$149"
+                  price="$59.99"
                   period={t("pricing.per_month")}
                   description="Unlimited power for established brands"
                   features={planFeatures.map(f => f.enterprise)}

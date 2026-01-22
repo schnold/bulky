@@ -63,6 +63,7 @@
         "status_filter": "Estado",
         "type_filter": "Tipo de producto",
         "vendor_filter": "Proveedor",
+        "optimization_filter": "Estado de Optimización",
         "clear_filters": "Limpiar todo",
         "showing_products": "Mostrando {{count}} productos",
         "per_page": "por página",

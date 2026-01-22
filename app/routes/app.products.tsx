@@ -435,6 +435,8 @@ export default function Products() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [productTypeFilter, setProductTypeFilter] = useState("");
   const [vendorFilter, setVendorFilter] = useState("");
+  const [optimizationFilter, setOptimizationFilter] = useState<string[]>([]);
+  const [pageInputValue, setPageInputValue] = useState("");
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [optimizingProducts, setOptimizingProducts] = useState<Set<string>>(new Set());
   const [completedProducts, setCompletedProducts] = useState<Set<string>>(new Set());
@@ -489,6 +491,7 @@ export default function Products() {
     const initialStatus = searchParams.get("status");
     const initialProductType = searchParams.get("productType") || "";
     const initialVendor = searchParams.get("vendor") || "";
+    const initialOptimization = searchParams.get("optimization");
     const initialPerPage = searchParams.get("productsPerPage") || (ld?.productsPerPage?.toString() ?? "15");
     const initialSort = searchParams.get("sort") || "created_at_desc";
 
@@ -496,6 +499,7 @@ export default function Products() {
     setStatusFilter(initialStatus ? [initialStatus] : []);
     setProductTypeFilter(initialProductType);
     setVendorFilter(initialVendor);
+    setOptimizationFilter(initialOptimization ? [initialOptimization] : []);
     setSelectedProductsPerPage(initialPerPage);
     setSortValue(initialSort);
     setIsInitialized(true);
@@ -547,18 +551,21 @@ export default function Products() {
       const newStatus = statusFilter.length > 0 ? statusFilter[0] : "";
       const newProductType = productTypeFilter || "";
       const newVendor = vendorFilter || "";
+      const newOptimization = optimizationFilter.length > 0 ? optimizationFilter[0] : "";
 
       // Check if filter params actually changed to avoid unnecessary updates
       const currentQuery = searchParams.get("query") || "";
       const currentStatus = searchParams.get("status") || "";
       const currentProductType = searchParams.get("productType") || "";
       const currentVendor = searchParams.get("vendor") || "";
+      const currentOptimization = searchParams.get("optimization") || "";
 
       const filtersChanged =
         newQuery !== currentQuery ||
         newStatus !== currentStatus ||
         newProductType !== currentProductType ||
-        newVendor !== currentVendor;
+        newVendor !== currentVendor ||
+        newOptimization !== currentOptimization;
 
       if (!filtersChanged) return; // No change, don't update
 
@@ -568,6 +575,7 @@ export default function Products() {
       if (newStatus) newSearchParams.set("status", newStatus);
       if (newProductType) newSearchParams.set("productType", newProductType);
       if (newVendor) newSearchParams.set("vendor", newVendor);
+      if (newOptimization) newSearchParams.set("optimization", newOptimization);
 
       // Preserve productsPerPage setting
       const perPage = searchParams.get("productsPerPage");
@@ -576,7 +584,7 @@ export default function Products() {
       setSearchParams(newSearchParams, { replace: true, preventScrollReset: true });
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [searchValue, statusFilter, productTypeFilter, vendorFilter, setSearchParams, searchParams, isInitialized]);
+  }, [searchValue, statusFilter, productTypeFilter, vendorFilter, optimizationFilter, setSearchParams, searchParams, isInitialized]);
 
   // Stable callbacks (unconditional). Define with function declarations to avoid lint false-positives.
   const handleSearchChange = useCallback((value: string) => {
@@ -593,6 +601,10 @@ export default function Products() {
 
   const handleVendorFilterChange = useCallback((value: string) => {
     setVendorFilter(value);
+  }, []);
+
+  const handleOptimizationFilterChange = useCallback((value: string[]) => {
+    setOptimizationFilter(value);
   }, []);
 
   const handleSortChange = useCallback((value: string) => {
@@ -627,12 +639,25 @@ export default function Products() {
     setStatusFilter([]);
     setProductTypeFilter("");
     setVendorFilter("");
+    setOptimizationFilter([]);
     setSearchParams(new URLSearchParams(), { replace: true, preventScrollReset: true });
   }, [setSearchParams]);
 
   // Do NOT early-return before all hooks; render a loading state instead to keep hooks order stable
 
-  const { products, pageInfo, currentPage, productsPerPage, user, subscription } = loaderData as LoaderData;
+  const { products: allProducts, pageInfo, currentPage, productsPerPage, user, subscription } = loaderData as LoaderData;
+
+  // Filter products based on optimization status
+  const products = optimizationFilter.length > 0
+    ? allProducts.filter(product => {
+        if (optimizationFilter[0] === "optimized") {
+          return product.isOptimized === true;
+        } else if (optimizationFilter[0] === "unoptimized") {
+          return product.isOptimized !== true;
+        }
+        return true;
+      })
+    : allProducts;
 
   // Sync per-page state with validated loader data
   useEffect(() => {
@@ -1212,6 +1237,24 @@ export default function Products() {
       ),
       shortcut: false,
     },
+    {
+      key: "optimization",
+      label: "Optimization Status",
+      filter: (
+        <ChoiceList
+          title={t("products.optimization_filter")}
+          titleHidden
+          choices={[
+            { label: "Optimized", value: "optimized" },
+            { label: "Unoptimized", value: "unoptimized" },
+          ]}
+          selected={optimizationFilter}
+          onChange={handleOptimizationFilterChange}
+          allowMultiple={false}
+        />
+      ),
+      shortcut: true,
+    },
   ];
 
   const appliedFilters = [];
@@ -1236,6 +1279,13 @@ export default function Products() {
       onRemove: () => setVendorFilter(""),
     });
   }
+  if (optimizationFilter.length > 0) {
+    appliedFilters.push({
+      key: "optimization",
+      label: `Optimization: ${optimizationFilter[0] === "optimized" ? "Optimized" : "Unoptimized"}`,
+      onRemove: () => setOptimizationFilter([]),
+    });
+  }
 
   const handlePrevious = () => {
     const newSearchParams = new URLSearchParams(searchParams);
@@ -1258,6 +1308,82 @@ export default function Products() {
     }
     setSearchParams(newSearchParams, { preventScrollReset: true });
   };
+
+  const handlePageInputChange = useCallback((value: string) => {
+    // Only allow numbers
+    const numericValue = value.replace(/[^0-9]/g, "");
+    setPageInputValue(numericValue);
+  }, []);
+
+  const handleGoToPage = useCallback(() => {
+    const targetPage = parseInt(pageInputValue, 10);
+    if (isNaN(targetPage) || targetPage < 1) {
+      setToastMessage("Please enter a valid page number");
+      setToastError(true);
+      setShowToast(true);
+      return;
+    }
+
+    if (targetPage === currentPage) {
+      setPageInputValue("");
+      return;
+    }
+
+    const pageDiff = targetPage - currentPage;
+    
+    // For large jumps, show a warning
+    if (Math.abs(pageDiff) > 10) {
+      setToastMessage("Large page jumps may take a moment. Navigating step by step...");
+      setToastError(false);
+      setShowToast(true);
+    }
+
+    // Navigate to the target page step by step
+    // Since we're using cursor-based pagination, we need to navigate step by step
+    if (targetPage < currentPage) {
+      // Going backwards - navigate backwards step by step
+      let remainingPages = Math.abs(pageDiff);
+      const navigateBackward = () => {
+        if (remainingPages > 0) {
+          const newSearchParams = new URLSearchParams(searchParams);
+          newSearchParams.set("direction", "previous");
+          const currentPageNum = parseInt(newSearchParams.get("page") || "1", 10);
+          newSearchParams.set("page", (currentPageNum - 1).toString());
+          if (pageInfo.hasPreviousPage) {
+            newSearchParams.set("cursor", pageInfo.startCursor || "");
+          }
+          setSearchParams(newSearchParams, { preventScrollReset: true });
+          remainingPages--;
+          if (remainingPages > 0) {
+            setTimeout(navigateBackward, 300);
+          }
+        }
+      };
+      navigateBackward();
+    } else {
+      // Going forward - navigate forward step by step
+      let remainingPages = pageDiff;
+      const navigateForward = () => {
+        if (remainingPages > 0) {
+          const newSearchParams = new URLSearchParams(searchParams);
+          newSearchParams.set("direction", "next");
+          const currentPageNum = parseInt(newSearchParams.get("page") || "1", 10);
+          newSearchParams.set("page", (currentPageNum + 1).toString());
+          if (pageInfo.hasNextPage) {
+            newSearchParams.set("cursor", pageInfo.endCursor || "");
+          }
+          setSearchParams(newSearchParams, { preventScrollReset: true });
+          remainingPages--;
+          if (remainingPages > 0) {
+            setTimeout(navigateForward, 300);
+          }
+        }
+      };
+      navigateForward();
+    }
+    
+    setPageInputValue("");
+  }, [pageInputValue, currentPage, searchParams, setSearchParams, pageInfo]);
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
@@ -2143,14 +2269,48 @@ export default function Products() {
                             onChange={handleProductsPerPageChange}
                           />
                         </InlineStack>
-                        {(pageInfo.hasNextPage || pageInfo.hasPreviousPage) && (
-                          <Pagination
-                            hasPrevious={pageInfo.hasPreviousPage}
-                            onPrevious={handlePrevious}
-                            hasNext={pageInfo.hasNextPage}
-                            onNext={handleNext}
-                          />
-                        )}
+                        <InlineStack gap="300" align="center">
+                          {(pageInfo.hasNextPage || pageInfo.hasPreviousPage) && (
+                            <>
+                              <Pagination
+                                hasPrevious={pageInfo.hasPreviousPage}
+                                onPrevious={handlePrevious}
+                                hasNext={pageInfo.hasNextPage}
+                                onNext={handleNext}
+                              />
+                              <InlineStack gap="200" align="center">
+                                <Text variant="bodySm" tone="subdued" as="span">
+                                  Page {currentPage}
+                                </Text>
+                                <div 
+                                  style={{ width: "80px" }}
+                                  onKeyDown={(e: React.KeyboardEvent) => {
+                                    if (e.key === "Enter") {
+                                      handleGoToPage();
+                                    }
+                                  }}
+                                >
+                                  <TextField
+                                    label="Go to page"
+                                    labelHidden
+                                    type="number"
+                                    value={pageInputValue}
+                                    onChange={handlePageInputChange}
+                                    placeholder="Page #"
+                                    autoComplete="off"
+                                  />
+                                </div>
+                                <Button
+                                  size="slim"
+                                  onClick={handleGoToPage}
+                                  disabled={!pageInputValue || pageInputValue === currentPage.toString()}
+                                >
+                                  Go
+                                </Button>
+                              </InlineStack>
+                            </>
+                          )}
+                        </InlineStack>
                       </InlineStack>
                     </Box>
                   </Card>

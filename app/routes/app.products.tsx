@@ -569,7 +569,7 @@ export default function Products() {
 
       if (!filtersChanged) return; // No change, don't update
 
-      // Create new params, preserving productsPerPage but resetting pagination (cursor/page)
+      // Create new params, preserving productsPerPage and sort but resetting pagination (cursor/page)
       const newSearchParams = new URLSearchParams();
       if (newQuery) newSearchParams.set("query", newQuery);
       if (newStatus) newSearchParams.set("status", newStatus);
@@ -577,9 +577,12 @@ export default function Products() {
       if (newVendor) newSearchParams.set("vendor", newVendor);
       if (newOptimization) newSearchParams.set("optimization", newOptimization);
 
-      // Preserve productsPerPage setting
+      // Preserve productsPerPage and sort settings
       const perPage = searchParams.get("productsPerPage");
       if (perPage) newSearchParams.set("productsPerPage", perPage);
+
+      const sort = searchParams.get("sort");
+      if (sort) newSearchParams.set("sort", sort);
 
       setSearchParams(newSearchParams, { replace: true, preventScrollReset: true });
     }, 500);
@@ -640,8 +643,16 @@ export default function Products() {
     setProductTypeFilter("");
     setVendorFilter("");
     setOptimizationFilter([]);
-    setSearchParams(new URLSearchParams(), { replace: true, preventScrollReset: true });
-  }, [setSearchParams]);
+
+    // Preserve sort and productsPerPage when clearing filters
+    const newSearchParams = new URLSearchParams();
+    const sort = searchParams.get("sort");
+    const perPage = searchParams.get("productsPerPage");
+    if (sort) newSearchParams.set("sort", sort);
+    if (perPage) newSearchParams.set("productsPerPage", perPage);
+
+    setSearchParams(newSearchParams, { replace: true, preventScrollReset: true });
+  }, [setSearchParams, searchParams]);
 
   // Do NOT early-return before all hooks; render a loading state instead to keep hooks order stable
 

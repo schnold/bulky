@@ -437,6 +437,8 @@ export default function Products() {
   const [vendorFilter, setVendorFilter] = useState("");
   const [optimizationFilter, setOptimizationFilter] = useState<string[]>([]);
   const [pageInputValue, setPageInputValue] = useState("");
+  /** When set, we navigate toward this page one step per loader update (keeps cursors in sync with filters). */
+  const [targetGoToPage, setTargetGoToPage] = useState<number | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [optimizingProducts, setOptimizingProducts] = useState<Set<string>>(new Set());
   const [completedProducts, setCompletedProducts] = useState<Set<string>>(new Set());
@@ -675,7 +677,43 @@ export default function Products() {
     setSelectedProductsPerPage(productsPerPage.toString());
   }, [productsPerPage]);
 
-
+  // Drive "Go to page" by one step per loader update so cursors stay in sync (works with filters)
+  useEffect(() => {
+    if (targetGoToPage == null || isInvalid) return;
+    if (targetGoToPage === currentPage) {
+      setTargetGoToPage(null);
+      return;
+    }
+    if (targetGoToPage > currentPage) {
+      if (!pageInfo.hasNextPage) {
+        setTargetGoToPage(null);
+        setToastMessage("No more pages. You're on the last page.");
+        setToastError(false);
+        setShowToast(true);
+        return;
+      }
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("direction", "next");
+      nextParams.set("page", (currentPage + 1).toString());
+      nextParams.set("cursor", pageInfo.endCursor || "");
+      setSearchParams(nextParams, { preventScrollReset: true });
+      return;
+    }
+    if (targetGoToPage < currentPage) {
+      if (!pageInfo.hasPreviousPage) {
+        setTargetGoToPage(null);
+        setToastMessage("No more pages. You're on the first page.");
+        setToastError(false);
+        setShowToast(true);
+        return;
+      }
+      const prevParams = new URLSearchParams(searchParams);
+      prevParams.set("direction", "previous");
+      prevParams.set("page", (currentPage - 1).toString());
+      prevParams.set("cursor", pageInfo.startCursor || "");
+      setSearchParams(prevParams, { preventScrollReset: true });
+    }
+  }, [targetGoToPage, currentPage, pageInfo.hasNextPage, pageInfo.hasPreviousPage, pageInfo.endCursor, pageInfo.startCursor, searchParams, setSearchParams, isInvalid]);
 
   const handleOptimizeSelected = useCallback(() => {
     if (selectedItems.length === 0) return;
@@ -1342,61 +1380,16 @@ export default function Products() {
       return;
     }
 
-    const pageDiff = targetPage - currentPage;
-    
-    // For large jumps, show a warning
-    if (Math.abs(pageDiff) > 10) {
-      setToastMessage("Large page jumps may take a moment. Navigating step by step...");
+    const pageDiff = Math.abs(targetPage - currentPage);
+    if (pageDiff > 10) {
+      setToastMessage("Navigating step by step…");
       setToastError(false);
       setShowToast(true);
     }
 
-    // Navigate to the target page step by step
-    // Since we're using cursor-based pagination, we need to navigate step by step
-    if (targetPage < currentPage) {
-      // Going backwards - navigate backwards step by step
-      let remainingPages = Math.abs(pageDiff);
-      const navigateBackward = () => {
-        if (remainingPages > 0) {
-          const newSearchParams = new URLSearchParams(searchParams);
-          newSearchParams.set("direction", "previous");
-          const currentPageNum = parseInt(newSearchParams.get("page") || "1", 10);
-          newSearchParams.set("page", (currentPageNum - 1).toString());
-          if (pageInfo.hasPreviousPage) {
-            newSearchParams.set("cursor", pageInfo.startCursor || "");
-          }
-          setSearchParams(newSearchParams, { preventScrollReset: true });
-          remainingPages--;
-          if (remainingPages > 0) {
-            setTimeout(navigateBackward, 300);
-          }
-        }
-      };
-      navigateBackward();
-    } else {
-      // Going forward - navigate forward step by step
-      let remainingPages = pageDiff;
-      const navigateForward = () => {
-        if (remainingPages > 0) {
-          const newSearchParams = new URLSearchParams(searchParams);
-          newSearchParams.set("direction", "next");
-          const currentPageNum = parseInt(newSearchParams.get("page") || "1", 10);
-          newSearchParams.set("page", (currentPageNum + 1).toString());
-          if (pageInfo.hasNextPage) {
-            newSearchParams.set("cursor", pageInfo.endCursor || "");
-          }
-          setSearchParams(newSearchParams, { preventScrollReset: true });
-          remainingPages--;
-          if (remainingPages > 0) {
-            setTimeout(navigateForward, 300);
-          }
-        }
-      };
-      navigateForward();
-    }
-    
+    setTargetGoToPage(targetPage);
     setPageInputValue("");
-  }, [pageInputValue, currentPage, searchParams, setSearchParams, pageInfo]);
+  }, [pageInputValue, currentPage]);
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {

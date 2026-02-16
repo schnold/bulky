@@ -8,6 +8,8 @@ const OptimizedDataSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
   handle: z.string().optional(),
+  /** When URL update is enabled, the pre-update handle so we can create a redirect from old URL to new. */
+  originalHandle: z.string().optional(),
   productType: z.string().optional().default(""),
   vendor: z.string().optional().default(""),
   tags: z.string().optional().default(""),
@@ -122,6 +124,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (updatedProduct) {
         console.log(`🎉 Successfully published product: ${updatedProduct.title}`);
+
+        // When URL was updated, create a redirect from old URL to new (so old links keep working)
+        const newHandle = optimizedData.handle;
+        const oldHandle = optimizedData.originalHandle;
+        if (newHandle && oldHandle && oldHandle !== newHandle) {
+          try {
+            const redirectResponse = await adminClient.graphql(
+              `mutation urlRedirectCreate($urlRedirect: UrlRedirectInput!) {
+                urlRedirectCreate(urlRedirect: $urlRedirect) {
+                  urlRedirect { id path target }
+                  userErrors { field message }
+                }
+              }`,
+              {
+                urlRedirect: {
+                  path: `/products/${oldHandle}`,
+                  target: `/products/${newHandle}`,
+                },
+              }
+            );
+            const redirectData = await redirectResponse.json();
+            const redirectErrors = redirectData.data?.urlRedirectCreate?.userErrors;
+            if (redirectErrors?.length) {
+              console.warn("⚠️ Redirect creation warning:", redirectErrors.map((e: any) => e.message).join(", "));
+            } else {
+              console.log(`✅ Redirect created: /products/${oldHandle} → /products/${newHandle}`);
+            }
+          } catch (redirectErr) {
+            console.error("⚠️ Failed to create URL redirect (product update succeeded):", redirectErr);
+          }
+        }
 
         // Mark product as optimized in database
         const { ensureUserExists } = await import("../utils/db.server");
@@ -257,6 +290,37 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           } else if (updatedProduct) {
             publishedCount++;
             console.log(`✅ Published: ${updatedProduct.title}`);
+
+            // When URL was updated, create redirect from old URL to new
+            const newHandle = productData.optimizedData.handle;
+            const oldHandle = productData.optimizedData.originalHandle;
+            if (newHandle && oldHandle && oldHandle !== newHandle) {
+              try {
+                const redirectResponse = await adminClient.graphql(
+                  `mutation urlRedirectCreate($urlRedirect: UrlRedirectInput!) {
+                    urlRedirectCreate(urlRedirect: $urlRedirect) {
+                      urlRedirect { id path target }
+                      userErrors { field message }
+                    }
+                  }`,
+                  {
+                    urlRedirect: {
+                      path: `/products/${oldHandle}`,
+                      target: `/products/${newHandle}`,
+                    },
+                  }
+                );
+                const redirectData = await redirectResponse.json();
+                const redirectErrors = redirectData.data?.urlRedirectCreate?.userErrors;
+                if (redirectErrors?.length) {
+                  console.warn(`⚠️ Redirect for ${productData.id}:`, redirectErrors.map((e: any) => e.message).join(", "));
+                } else {
+                  console.log(`✅ Redirect: /products/${oldHandle} → /products/${newHandle}`);
+                }
+              } catch (redirectErr) {
+                console.error(`⚠️ Redirect failed for ${productData.id}:`, redirectErr);
+              }
+            }
 
             // Mark product as optimized in database for bulk publish
             try {

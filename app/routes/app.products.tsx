@@ -784,6 +784,7 @@ export default function Products() {
     // If disabled, use original handle to keep URL unchanged
     if (urlUpdateSettings[productId] !== false && optimized.handle) {
       dataToPublish.handle = optimized.handle;
+      dataToPublish.originalHandle = optimizedData.originalData.handle;
     } else {
       dataToPublish.handle = optimizedData.originalData.handle;
     }
@@ -848,6 +849,7 @@ export default function Products() {
       // Include handle if URL update is enabled (default is enabled)
       if (urlUpdateSettings[productId] !== false && optimized.handle) {
         dataToPublish.handle = optimized.handle;
+        dataToPublish.originalHandle = optimizedProducts[productId].originalData.handle;
       } else {
         dataToPublish.handle = optimizedProducts[productId].originalData.handle;
       }

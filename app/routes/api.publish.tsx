@@ -53,6 +53,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       const { productId, optimizedData } = result.data;
+      console.log(`🔍 API Received - ProductId: ${productId}, Handle: ${optimizedData.handle}, OriginalHandle: ${optimizedData.originalHandle}`);
 
       // Use serverless-compatible GraphQL client
       const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
@@ -128,7 +129,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         // When URL was updated, create a redirect from old URL to new (so old links keep working)
         const newHandle = optimizedData.handle;
         const oldHandle = optimizedData.originalHandle;
+        
+        console.log(`🔍 Redirect Debug - newHandle: ${newHandle}, oldHandle: ${oldHandle}, areEqual: ${oldHandle === newHandle}`);
+        
         if (newHandle && oldHandle && oldHandle !== newHandle) {
+          console.log(`🔄 Creating redirect: /products/${oldHandle} → /products/${newHandle}`);
           try {
             const redirectResponse = await adminClient.graphql(
               `mutation urlRedirectCreate($urlRedirect: UrlRedirectInput!) {
@@ -145,15 +150,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               }
             );
             const redirectData = await redirectResponse.json();
+            console.log(`🔍 Redirect response:`, JSON.stringify(redirectData, null, 2));
             const redirectErrors = redirectData.data?.urlRedirectCreate?.userErrors;
             if (redirectErrors?.length) {
-              console.warn("⚠️ Redirect creation warning:", redirectErrors.map((e: any) => e.message).join(", "));
+              console.error("❌ Redirect creation failed:", redirectErrors.map((e: any) => e.message).join(", "));
             } else {
               console.log(`✅ Redirect created: /products/${oldHandle} → /products/${newHandle}`);
             }
           } catch (redirectErr) {
-            console.error("⚠️ Failed to create URL redirect (product update succeeded):", redirectErr);
+            console.error("❌ Failed to create URL redirect (product update succeeded):", redirectErr);
           }
+        } else {
+          console.log(`⚠️ Redirect NOT created - Reason: newHandle=${!!newHandle}, oldHandle=${!!oldHandle}, different=${oldHandle !== newHandle}`);
         }
 
         // Mark product as optimized in database
@@ -214,6 +222,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       const { productsData } = result.data;
       console.log(`✅ Bulk publish - Validated ${productsData.length} products for publishing`);
+      
+      // Log redirect data for each product
+      productsData.forEach((pd, i) => {
+        console.log(`🔍 Bulk API Product ${i + 1}: Handle=${pd.optimizedData.handle}, OriginalHandle=${pd.optimizedData.originalHandle}`);
+      });
 
       // Use serverless-compatible GraphQL client
       const { createServerlessAdminClient } = await import("../utils/shopify-graphql.server");
@@ -294,7 +307,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             // When URL was updated, create redirect from old URL to new
             const newHandle = productData.optimizedData.handle;
             const oldHandle = productData.optimizedData.originalHandle;
+            
+            console.log(`🔍 Bulk Redirect Debug - Product ${productData.id}: newHandle=${newHandle}, oldHandle=${oldHandle}`);
+            
             if (newHandle && oldHandle && oldHandle !== newHandle) {
+              console.log(`🔄 Bulk: Creating redirect: /products/${oldHandle} → /products/${newHandle}`);
               try {
                 const redirectResponse = await adminClient.graphql(
                   `mutation urlRedirectCreate($urlRedirect: UrlRedirectInput!) {
@@ -311,15 +328,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   }
                 );
                 const redirectData = await redirectResponse.json();
+                console.log(`🔍 Bulk redirect response:`, JSON.stringify(redirectData, null, 2));
                 const redirectErrors = redirectData.data?.urlRedirectCreate?.userErrors;
                 if (redirectErrors?.length) {
-                  console.warn(`⚠️ Redirect for ${productData.id}:`, redirectErrors.map((e: any) => e.message).join(", "));
+                  console.error(`❌ Bulk redirect for ${productData.id}:`, redirectErrors.map((e: any) => e.message).join(", "));
                 } else {
-                  console.log(`✅ Redirect: /products/${oldHandle} → /products/${newHandle}`);
+                  console.log(`✅ Bulk redirect: /products/${oldHandle} → /products/${newHandle}`);
                 }
               } catch (redirectErr) {
-                console.error(`⚠️ Redirect failed for ${productData.id}:`, redirectErr);
+                console.error(`❌ Bulk redirect failed for ${productData.id}:`, redirectErr);
               }
+            } else {
+              console.log(`⚠️ Bulk redirect NOT created for ${productData.id} - newHandle=${!!newHandle}, oldHandle=${!!oldHandle}, different=${oldHandle !== newHandle}`);
             }
 
             // Mark product as optimized in database for bulk publish

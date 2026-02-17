@@ -8,7 +8,6 @@ application_url = "https://b1-bulk-product-seo-enhancer.netlify.app/"
 embedded = true
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = false
 
 [webhooks]
@@ -35,16 +34,11 @@ api_version = "2025-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,read_products,read_product_listings,write_product_listings"
+# Added read/write_online_store_navigation for URL redirect management when product URLs are optimized
+scopes = "write_products,read_products,read_product_listings,write_product_listings,read_online_store_navigation,write_online_store_navigation"
 
 [auth]
 redirect_urls = ["https://b1-bulk-product-seo-enhancer.netlify.app/auth/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/auth/shopify/callback", "https://b1-bulk-product-seo-enhancer.netlify.app/api/auth/callback"]
-
-# Enable direct API access for embedded apps using session tokens
-[admin]
-# Direct API mode allows authenticated fetch calls directly from the frontend
-# online = online access mode (user-specific), offline = offline access mode (shop-specific)
-direct_api_mode = "online"
 
 [pos]
 embedded = false

@@ -823,8 +823,10 @@ export default function Products() {
     if (urlUpdateSettings[productId] !== false && optimized.handle) {
       dataToPublish.handle = optimized.handle;
       dataToPublish.originalHandle = optimizedData.originalData.handle;
+      console.log(`🔍 Frontend: Sending handles - new: ${optimized.handle}, old: ${optimizedData.originalData.handle}`);
     } else {
       dataToPublish.handle = optimizedData.originalData.handle;
+      console.log(`🔍 Frontend: URL update disabled, keeping original handle: ${optimizedData.originalData.handle}`);
     }
 
     // Include SEO fields if SEO update is enabled (default is enabled)
@@ -888,8 +890,10 @@ export default function Products() {
       if (urlUpdateSettings[productId] !== false && optimized.handle) {
         dataToPublish.handle = optimized.handle;
         dataToPublish.originalHandle = optimizedProducts[productId].originalData.handle;
+        console.log(`🔍 Bulk Frontend: Product ${productId} - new: ${optimized.handle}, old: ${optimizedProducts[productId].originalData.handle}`);
       } else {
         dataToPublish.handle = optimizedProducts[productId].originalData.handle;
+        console.log(`🔍 Bulk Frontend: Product ${productId} - URL update disabled`);
       }
 
       // Include SEO fields if SEO update is enabled (default is enabled)
